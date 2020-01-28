@@ -1,7 +1,7 @@
 from setuptools import setup
 import re
 
-with open('mahjong.py') as f:
+with open('mahjong/__init__.py') as f:
     content = f.read()
     longdesc = re.match(r'^"""([\s\S]+?)"""', content).group(1).strip()
     with open('README.rst', 'w') as rdme:
@@ -10,7 +10,7 @@ with open('mahjong.py') as f:
 del f, rdme
 
 setup(
-    name="mahjong",
+    name="python-mahjong",
     version=version,
     description="Abstract away the logic of mahjong games.",
     long_description=longdesc,
@@ -25,7 +25,7 @@ setup(
         'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
         'Programming Language :: Python :: 3.7'
     ],
-    keywords='file format parser',
-    py_modules=['mahjong'],
+    keywords='mahjong game engine',
+    packages=['mahjong'],
     python_requires='>=3.7',
 )

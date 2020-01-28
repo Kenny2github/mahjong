@@ -1,168 +1,10 @@
-"""
-Mahjong
--------
+"""Contains Player(s) classes."""
 
-Abstract away the logic of mahjong games (for oh, it is complicated!)
-Only worry about the representation.
-
-Example Usage
-=============
-
-.. code-block:: python
-    >>> game = mahjong.Game()
-"""
-import random
-from enum import Enum
-
-__version__ = "0.0.1"
+from .melds import Kong, Pong, Chow, Eyes
+from .tiles import Simples, Honors, Bonuses, Tile
 
 PLAYERS = 4
 HANDSIZE = 13
-
-class Suit(Enum):
-    """Base enum class for suits."""
-    pass
-
-class Simples(Suit):
-    """Enum for simples suits (numbered from 1-9)"""
-    ZHU = 'zhu'
-    TONG = 'tong'
-    WAN = 'wan'
-
-class Honors(Suit):
-    """Enum for honors suits (tiles that cannot Chow)"""
-    FENG = 'feng'
-    LONG = 'long'
-
-class Bonuses(Suit):
-    """Enum for bonus suits (tiles that only count when you win)"""
-    HUA = 'hua'
-    GUI = 'gui'
-
-class Tile:
-    """Data class for tiles."""
-
-    def __init__(self, suit, number):
-        """Initialize data"""
-        self.suit = suit
-        self.number = number
-
-    def __str__(self):
-        """str(tile) -> 'suit/number'"""
-        return f'{self.suit.value}/{self.number}'
-    __repr__ = __str__
-
-    def __eq__(self, other):
-        """Tiles are equal when their suits and numbers are equal."""
-        if not isinstance(other, type(self)):
-            return NotImplemented
-        return self.suit == other.suit and self.number == other.number
-
-    def __lt__(self, other):
-        """Tiles are sorted by suit before number."""
-        if not isinstance(other, type(self)):
-            return NotImplemented
-        if self.suit == other.suit:
-            return self.number < other.number
-        # note: this does indeed mean that suit sorting is arbitrary
-        # however the important part is the grouping
-        return self.suit.value < other.suit.value
-
-class Meld:
-    """Represents a single meld of tiles."""
-    def __init__(self, tiles):
-        """Initialize the meld with its tiles and check validity."""
-        self.tiles = tiles
-        self.check_meld()
-
-    def __str__(self):
-        """str(meld) -> 'suit1/num1|suit2/num2|...'"""
-        return '|'.join(map(str, self.tiles))
-    __repr__ = __str__
-
-    def check_meld(self):
-        """Check validity of the meld. Raises ValueError upon failrue."""
-        raise NotImplementedError
-
-    def check_suit(self):
-        """Ensures all tiles are the same suit."""
-        suit = None
-        for tile in self.tiles:
-            if suit is not None and tile.suit != suit:
-                raise ValueError(
-                    f'{type(self).__name__}s must be one suit: '
-                    f'{suit} != {tile.suit}'
-                )
-            suit = tile.suit
-
-class _SameNum(Meld):
-    """Base class that provides check_num method."""
-    def check_meld(self):
-        """Check validity of the same-numbered meld."""
-        self.check_num()
-
-    def check_num(self):
-        """Ensures all tiles are the same number/value."""
-        self.check_suit()
-        num = None
-        for tile in self.tiles:
-            if num is not None and tile.number != num:
-                raise ValueError(
-                    f'{type(self).__name__}s must be all the same tile: '
-                    f'{num} != {tile.number}'
-                )
-            num = tile.number
-
-class Pong(_SameNum):
-    """Represents a Pong meld (three identical tiles)"""
-    def check_meld(self):
-        """Check validity as a Pong."""
-        if len(self.tiles) != 3:
-            raise ValueError('Pongs must be 3 tiles')
-        self.check_num()
-
-class Kong(_SameNum):
-    """Represents a Kong meld (four identical tiles, counted as three)"""
-    def check_meld(self):
-        """Check validity as a Kong."""
-        if len(self.tiles) != 4:
-            raise ValueError('Kongs must be 4 tiles')
-        self.check_num()
-
-    def __str__(self):
-        """Kongs are represented by one faceup, two stacked down, one up"""
-        return '|'.join(map(str, [self.tiles[0], 'k', self.tiles[-1]]))
-
-class Chow(Meld):
-    """Represents a Chow meld (three tiles of the same suit with consecutive numbers)"""
-    def check_meld(self):
-        """Check validity as a Chow."""
-        if len(self.tiles) != 3:
-            raise ValueError('Chows must be 3 tiles')
-        for tile in self.tiles:
-            if not isinstance(tile.suit, Simples):
-                raise ValueError(
-                    'Chows must be Simples only, '
-                    f'not {type(tile.suit).__name__}'
-                )
-        self.check_suit()
-        self.tiles.sort()
-        num = None
-        for tile in self.tiles:
-            if num is not None and tile.number != num + 1:
-                raise ValueError(
-                    'Chows must be tiles with consecutive numbers: '
-                    f'{tile.number} != {num} + 1'
-                )
-            num = tile.number
-
-class Eyes(_SameNum):
-    """Represents an Eyes meld (two identical tiles), used only in winning hand)"""
-    def check_meld(self):
-        """Check validity as an Eyes."""
-        if len(self.tiles) != 2:
-            raise ValueError('Eyes must be 2 tiles')
-        self.check_num()
 
 class Player:
     """Represents operations on a specific player."""
@@ -173,11 +15,11 @@ class Player:
     # pid/seat = 3 => initial north
     pid = seat = 0
     hand = shown = bonus = []
-    draw = None
+    draw = None # index in hand of drawn tile
 
     def __init__(self, pid, root):
         self.pid = self.seat = pid
-        self._root = root
+        self._root = root # Players object to refer through
         self.hand = []
         self.shown = []
         self.bonus = []
@@ -188,21 +30,29 @@ class Player:
         del wall[:HANDSIZE]
         self.hand.sort()
         if self.seat == 0:
-            self.draw = wall.pop(0)
+            draw = wall.pop(0)
+            self.hand.append(draw)
+            self.hand.sort()
+            self.draw = self.hand.index(draw)
 
     def handle_bonuses(self, wall):
         """Handle bonus tiles.
         Move them to self.bonus and draw replacement tiles from the wall.
         """
-        i = 0
-        while i < HANDSIZE:
-            if isinstance(self.hand[i].suit, Bonuses):
-                # remove bonus from hand
-                self.bonus.append(self.hand[i])
-                del self.hand[i]
-                # replenish hand with new tile from wall
-                self.hand.append(wall.pop())
-            i += 1
+        found = True
+        while found:
+            found = False
+            i = 0
+            while i < len(self.hand):
+                if isinstance(self.hand[i].suit, Bonuses):
+                    # remove bonus from hand
+                    self.bonus.append(self.hand[i])
+                    del self.hand[i]
+                    # replenish hand with new tile from wall
+                    self.hand.append(wall.pop())
+                    found = True
+                else:
+                    i += 1
 
     #pylint: disable=too-many-branches,too-many-statements,too-many-locals
     def won(self, _hand=None):
@@ -225,7 +75,7 @@ class Player:
         simples = [t for t in hand if isinstance(t.suit, Simples)]
         others = [t for t in hand if not isinstance(t.suit, Simples)]
         print(simples, others)
-        eyes_checked = len(hand) == 16 # 16 tiles can only be four Kongs
+        eyes_checked = False # 16 tiles can only be four Kongs
         # Backtracking algorithm modified from https://stackoverflow.com/a/4941711/6605349
         winning = [] # indexes of winning tiles
         _shown = []
@@ -238,67 +88,67 @@ class Player:
             if all(idx in winning for idx in range(slen)):
                 print('bubbling')
                 return True # bubble up
-            while i < slen - 1: # slen - eyelen + 1
+            while i < slen - Eyes.size + 1:
                 if i in winning: # don't look at winning tiles
                     i += 1
                     continue
                 try:
-                    _shown.append(Kong(bunch[i:i+4]))
+                    _shown.append(Kong(bunch[i:i+Kong.size]))
                 except ValueError:
                     pass # not a Kong, next test
                 else:
-                    winning.extend(range(i, i+4)) # mark Kong tiles as winning
-                    i += 4 # jump past winning tiles
+                    winning.extend(range(i, i+Kong.size)) # mark Kong tiles as winning
+                    i += Kong.size # jump past winning tiles
                     print(' track into Kong')
                     if backtrack(i, chowq): # recursively backtrack
                         print('backtrack from Kong')
                         return True # return winning if recursive winning
-                    del winning[-4:] # otherwise unmark as winning
+                    del winning[-Kong.size:] # otherwise unmark as winning
                     if _shown:
                         del _shown[-1]
                 try:
-                    _shown.append(Pong(bunch[i:i+3]))
+                    _shown.append(Pong(bunch[i:i+Pong.size]))
                 except ValueError:
                     pass # you get the drill
                 else:
-                    winning.extend(range(i, i+3))
-                    i += 3
+                    winning.extend(range(i, i+Pong.size))
+                    i += Pong.size
                     print(' track into Pong')
                     if backtrack(i, chowq):
                         print('backtrack from Pong')
                         return True
-                    del winning[-3:]
+                    del winning[-Pong.size:]
                     if _shown:
                         del _shown[-1]
                 if chowq:
                     try:
-                        _shown.append(Chow(bunch[i:i+3]))
+                        _shown.append(Chow(bunch[i:i+Chow.size]))
                     except ValueError:
                         pass
                     else:
-                        winning.extend(range(i, i+3))
-                        i += 3
+                        winning.extend(range(i, i+Chow.size))
+                        i += Chow.size
                         print(' track into Chow')
                         if backtrack(i, chowq):
                             print('backtrack from Chow')
                             return True
-                        del winning[-3:]
+                        del winning[-Chow.size:]
                         if _shown:
                             del _shown[-1]
                 if not eyes_checked: # there can only be one pair of Eyes
                     try:
-                        _shown.append(Eyes(bunch[i:i+2]))
+                        _shown.append(Eyes(bunch[i:i+Eyes.size]))
                     except ValueError:
                         pass
                     else:
-                        winning.extend(range(i, i+2))
-                        i += 2
+                        winning.extend(range(i, i+Eyes.size))
+                        i += Eyes.size
                         print(' track into Eyes')
                         eyes_checked = True
                         if backtrack(i, chowq):
                             print('backtrack from Eyes')
                             return True
-                        del winning[-2:]
+                        del winning[-Eyes.size:]
                         if _shown:
                             del _shown[-1]
                             eyes_checked = False
@@ -317,10 +167,20 @@ class Player:
             # It's specific to tiles that can Chow
             # sum of values of simples % 3 maps to possible
             # values of eyes tiles
-            values = ((3, 6, 9), (2, 5, 8), (1, 4, 7))
+            if len(hand) == 14:
+                values = ((3, 6, 9), (2, 5, 8), (1, 4, 7))
+                divisor = 3
+            elif len(hand) == 16:
+                values = (tuple(range(1, 10)))
+                divisor = 1
+            elif len(hand) == 18:
+                values = ((2, 4, 6, 8), (), (1, 3, 5, 7, 9), ())
+                divisor = 4
             total = sum(t.number + 1 for t in simples)
-            for eye_value in values[total % 3]:
-                for i in range(len(simples) - 1): # slen - eyelen + 1
+            print(f'total: {total} divisor: {divisor} remainder: {total % divisor}'
+                  f' result: {values[total % divisor]}')
+            for eye_value in values[total % divisor]:
+                for i in range(len(simples) - Eyes.size + 1):
                     if simples[i].number != eye_value - 1 or eye_value - 1 != simples[i+1].number:
                         continue
                     print('===\nChecking Eyes in:', simples[i:i+2], '\n===')
@@ -364,14 +224,13 @@ class Player:
             )
             if wonning:
                 print('Thirteen Orphans')
-                if _hand is None:
-                    self.hand = hand
-                    self.shown = shown
                 return 13 # 13 points for Thirteen Orphans
         if not wonning:
             return False
+        ##########################################################
         # Time to start counting points!
-        print('---')
+        # Rules from https://en.wikipedia.org/wiki/Hong_Kong_Mahjong_scoring_rules
+        print('---', shown)
         points = 0
         if all(isinstance(meld, (Chow, Eyes)) for meld in shown):
             print('common hand')
@@ -428,7 +287,7 @@ class Player:
         kongs = True
         pongs = True
         for meld in shown:
-            if not isinstance(meld, Kong):
+            if not isinstance(meld, (Kong, Eyes)):
                 kongs = False
             if not isinstance(meld, (Pong, Eyes)):
                 pongs = False
@@ -500,10 +359,7 @@ class Player:
         if orphans:
             print('mixed orphans')
             points += 1 # Mixed Orphans
-        # update hand and shown, finally - scoring is done
-        if _hand is None:
-            self.hand = hand
-            self.shown = shown
+        # scoring done, return
         return points
 
 class Players:
@@ -516,13 +372,17 @@ class Players:
         """Initialize players."""
         self.game = game
         self.players = [Player(i, self) for i in range(PLAYERS)]
+        self.init_players()
+
+    def init_players(self):
+        """Starting machinations for a round."""
         for play in self.players:
             play.draw_starting_hand(self.game.wall)
         for play in self.players:
             play.handle_bonuses(self.game.wall)
 
     def __getitem__(self, idx):
-        if not 0 < idx < PLAYERS:
+        if not idx < PLAYERS:
             raise IndexError
         return self.players[idx]
 
@@ -546,42 +406,3 @@ class Players:
         if self.game.wind == 0: # back to east wind, game over
             return True
         return False
-
-class Game:
-    """Base game class."""
-
-    wall = []
-    players = None
-    # wind = 0 => east wind
-    # wind = 1 => south wind
-    # wind = 2 => west wind
-    # wind = 3 = north wind
-    wind = 0
-
-    def __init__(self):
-        """Shuffle a new wall and initialize players."""
-        self.shuffle()
-        self.players = Players(self)
-
-    def shuffle(self):
-        """Create and shuffle a new wall. Called at initialization."""
-        wall = []
-        # simples
-        for suit in Simples:
-            for num in range(1, 10):
-                wall.extend([Tile(suit, num) for _ in range(4)])
-        # honors
-        for wind in range(4): # east, south, west, north
-            wall.extend([Tile(Honors.FENG, wind) for _ in range(4)])
-        for dragon in range(3): # zhong, fa, ban
-            wall.extend([Tile(Honors.LONG, dragon) for _ in range(4)])
-        # bonuses
-        for i in range(4):
-            wall.append(Tile(Bonuses.HUA, i))
-            wall.append(Tile(Bonuses.GUI, i))
-        random.shuffle(wall)
-        self.wall = wall
-
-    def advance(self):
-        """Advance one turn."""
-        pass
