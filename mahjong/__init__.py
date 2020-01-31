@@ -16,20 +16,23 @@ __version__ = "0.0.1"
 __all__ = [
     'Game',
     'Round',
+    'Turn',
     'Players',
     'Player',
     'Pong',
     'Kong',
     'Chow',
     'Eyes',
+    'Wu',
     'Tile',
     'Simples',
     'Honors',
     'Bonuses',
+    'Misc',
     'Meld',
 ]
 
-from .game import Game, Round
+from .game import Game, Round, Turn
 from .players import Players, Player
-from .melds import Meld, Pong, Kong, Chow, Eyes
-from .tiles import Tile, Simples, Honors, Bonuses
+from .melds import Meld, Pong, Kong, Chow, Eyes, Wu
+from .tiles import Tile, Simples, Honors, Bonuses, Misc

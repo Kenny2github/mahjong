@@ -1,14 +1,24 @@
 """Contains the Game and Round classes."""
 
 import random
-from .melds import Kong, Pong, Chow
+from collections import namedtuple
+from .melds import Kong, Pong, Chow, Wu
 from .tiles import Honors, Simples, Bonuses, Tile
 from .players import Players, PLAYERS
 
 __version__ = "0.0.1"
 
+Turn = namedtuple('Turn', [
+    'next', 'discard', 'jump'
+])
+Turn.__doc__ = """
+    0 - next player whose turn it is
+    1 - index in previous player's hand, of previous player's discard
+    2 - (player, meld_type)s who could steal the turn, in priority order
+"""
+
 def meld_possible(hand, meld_type=None, frozen=None):
-    """If a meld of meld_type is possible, return that meld.
+    """If a meld of meld_type is possible, return (that meld, index found).
     Otherwise, return None.
 
     If meld_type is None, checks all meld types except Eyes,
@@ -29,7 +39,7 @@ def meld_possible(hand, meld_type=None, frozen=None):
         dsize = 0
     for i in range(len(hand) - meld_type.size + 1 + dsize):
         try:
-            possible = meld_type(hand[i:i + meld_type.size + dsize] + frozen)
+            possible = (meld_type(hand[i:i + meld_type.size + dsize] + frozen), i)
         except ValueError:
             pass
         else:
@@ -80,58 +90,82 @@ class Round:
     def run(self):
         """Run the game. Returns a generator
 
-        Every generator iteration accepts one send() value:
-        the index in the last player's hand of the tile discarded by last player
-        (decision of player specified in previous yield)
+        Every generator iteration accepts one send() value, a 2-tuple of:
+        0 - the index in the last player's hand of the tile discarded by last player
+        1 - None, or a 2-tuple of:
+            0 - the player to skip to (could still be next player in line)
+            1 - the type of meld that they can make
 
-        Yields a 4-tuple of:
-        0 - next player whose turn it is
-        1 - previous send() value
-        2 - possible meld that the next player can make with the discard
-        3 - players who could steal the turn, in priority order
+        Yields a Turn namedtuple.
+
+        The flow of the game is as follows.
+        Note: "yielded" is equivalent to "returned from advance()"
+         1. (Player X, index of tile discarded in previous player's hand,
+            (player to jump to, meld they could make)s) yielded
+            * When returned from first_turn(), 2nd element is None
+            * Player.draw contains index in Player.hand of tile
+              drawn from wall. Can be None
+         2. If 3rd element is non-empty, ask each player in it whether
+            they want to do that meld. If Player J does:
+             1. Ask Player J which tile to discard (which cannot be in the meld)
+             2. Send (index of tile discarded in Player J's hand,
+                3rd element element containing Player J) to generator
+             3. Meld is added to Player J's shown melds and discard tile is discarded
+             4. Back to root 1, where X=J+1
+         3. Otherwise, ask Player X which tile to discard
+         4. Send (index of tile discarded in Player X's hand, None) to generator
+         5. Back to 1, where X=X+1
         """
         seat = 0
         play = self.players[seat]
-        discard, jump = yield (
-            play, play.draw,
+        discard, jump = yield Turn(
+            play, None,
             # only Kong possible to reveal from draw
-            meld_possible(play.hand, Kong), []
+            [(play, Kong)] if meld_possible(play.hand, Kong) else []
         )
         if jump is not None:
             raise ValueError('Cannot jump to a player before first turn')
-        discard_tile = play.hand.pop(discard)
         while 1:
             cont = True
-            while (jump is None and cont) or (jump is not None and play != jump):
+            discard_tile = play.hand.pop(discard)
+            while (jump is None and cont) or (jump is not None and play != jump[0]):
                 seat += 1
                 seat %= PLAYERS
                 play = self.players[seat]
                 cont = False
             if jump is None: # truly discarded
                 self.discard.append(discard_tile)
-            discard_tile = self.players[seat-1].hand.pop(discard)
+                draw = self.wall.pop(0)
+                while isinstance(draw.suit, Bonuses):
+                    play.bonus.append(draw)
+                    draw = self.wall.pop(0)
+                play.hand.append(draw)
+                play.draw = play.hand.index(draw)
+            else:
+                possible, idx = meld_possible(play.hand, jump[1])
+                play.shown.append(possible)
+                del play.hand[idx:idx+jump[1].size]
+                if jump[1] is Kong:
+                    # creating a Kong reduces your effective tile count by 1
+                    # so replenish a tile from the end of the wall
+                    play.hand.append(self.wall.pop())
             jumpers = [
                 None, # win
                 None, # pong/kong
                 None, # chow
             ]
-            for i in self.players:
-                i.hand.append(discard_tile)
-                i.hand.sort()
-                i.draw = i.hand.index(discard_tile)
-                if i is play:
-                    continue
-                if i.won():
-                    jumpers[0] = i
-                elif meld_possible(i.hand, Kong):
-                    jumpers[1] = i
-                elif meld_possible(i.hand, Pong):
-                    jumpers[1] = i
-                elif meld_possible(i.hand, Chow):
-                    jumpers[2] = i
-                i.hand.remove(discard_tile)
-                i.draw = None
-            discard, jump = yield (
+            idxx = self.players.players.index(play)
+            for idx, i in enumerate(self.players):
+                if meld_possible(i.hand, Wu, discard_tile):
+                    jumpers[0] = (i, Wu)
+                elif meld_possible(i.hand, Kong, discard_tile):
+                    jumpers[1] = (i, Kong)
+                elif meld_possible(i.hand, Pong, discard_tile):
+                    jumpers[1] = (i, Pong)
+                # chow can only be by next player
+                elif idx == idxx + 1 and meld_possible(i.hand, Chow, discard_tile):
+                    jumpers[2] = (i, Chow)
+            discard, jump = yield Turn(
                 play, discard,
                 meld_possible(play.hand),
                 [i for i in jumpers if i is not None]

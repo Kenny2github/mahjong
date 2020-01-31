@@ -14,16 +14,29 @@ class Simples(Suit):
 
 class Honors(Suit):
     """Enum for honors suits (tiles that cannot Chow)"""
-    FENG = 'feng'
-    LONG = 'long'
+    FENG = 'feng' # 0 = east, 1 = south, 2 = west, 3 = north
+    LONG = 'long' # 0 = hong zhong, 1 = fa cai, 2 = bai ban
 
 class Bonuses(Suit):
     """Enum for bonus suits (tiles that only count when you win)"""
     HUA = 'hua'
     GUI = 'gui'
 
+class Misc(Suit):
+    """Enum for special case suits"""
+    UNKNOWN = '?'
+    HIDDEN = 'k'
+    MISSING = ' '
+
+ORDER = {
+    'wan': 0, 'tong': 1, 'zhu': 2,
+    'feng': 3, 'long': 4
+}
+
 class Tile:
     """Data class for tiles."""
+    suit: Suit
+    number: int
 
     def __init__(self, suit, number):
         """Initialize data"""
@@ -47,6 +60,4 @@ class Tile:
             return NotImplemented
         if self.suit == other.suit:
             return self.number < other.number
-        # note: this does indeed mean that suit sorting is arbitrary
-        # however the important part is the grouping
-        return self.suit.value < other.suit.value
+        return ORDER[self.suit.value] < ORDER[other.suit.value]
