@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 *.egg*
+build/
+dist/
 pyrightconfig.json
 .pylint*
 .vscode

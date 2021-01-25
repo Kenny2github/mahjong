@@ -9,7 +9,14 @@ Example Usage
 =============
 
 .. code-block:: python
+    >>> import mahjong
     >>> game = mahjong.Game()
+    >>> question = game.play()
+    >>> next_question = question.answer(...)
+    >>> ...
+
+For full usage see the docs:
+https://github.com/Kenny2github/mahjong/wiki
 """
 
 __version__ = "1.0.0"

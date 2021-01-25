@@ -16,7 +16,7 @@ setup(
     long_description=longdesc,
     url="https://github.com/Kenny2github/mahjong",
     author="Ken Hilton",
-    license="GPLv3+",
+    license="LGPLv3+",
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
