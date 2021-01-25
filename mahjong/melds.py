@@ -1,350 +1,366 @@
-"""Contains the Meld class and its subclasses."""
+"""Contains classes representing melds that check their validity."""
+from __future__ import annotations
+from enum import Flag, auto
+from itertools import combinations
+from typing import Optional, Sequence, Set, Union, Iterable, List, Iterator, TypeVar, Type, Tuple
+from .tiles import Dragon, Honors, Tile, Simples, Bonuses, Misc
 
-from .tiles import Tile, Simples, Honors, Bonuses, Misc
+__all__ = [
+    'WuFlag',
+    'Meld',
+    'Pong',
+    'Kong',
+    'Chow',
+    'Eyes',
+    'Wu',
+]
+
+class WuFlag(Flag):
+    CHICKEN_HAND = 0
+
+    # types
+    COMMON_HAND = auto()
+    ALL_IN_TRIPLETS = auto()
+    MIXED_ONE_SUIT = auto()
+    ALL_ONE_SUIT = auto()
+    ALL_HONOR_TILES = auto()
+    SMALL_DRAGONS = auto()
+    GREAT_DRAGONS = auto()
+    SMALL_WINDS = auto()
+    GREAT_WINDS = auto()
+    THIRTEEN_ORPHANS = auto()
+    ALL_KONGS = auto()
+    SELF_TRIPLETS = auto()
+    ORPHANS = auto()
+    NINE_GATES = auto()
+
+    # presence of certain tiles
+    SEAT_WIND = auto()
+    PREVAILING_WIND = auto()
+    RED_DRAGON = auto()
+    GREEN_DRAGON = auto()
+    WHITE_DRAGON = auto()
+    MIXED_ORPHANS = auto()
+
+    # winning condition
+    SELF_DRAW = auto()
+    ALL_FROM_WALL = auto()
+    ROBBING_KONG = auto()
+    LAST_CATCH = auto()
+    BY_KONG = auto()
+    DOUBLE_KONG = auto()
+    HEAVENLY = auto()
+    EARTHLY = auto()
+
+def _tname(obj) -> str:
+    return type(obj).__name__
+
+T = TypeVar('T', bound='Meld')
 
 class Meld:
     """Represents a meld of tiles."""
 
     @property
-    def size(self):
-        """Size of this meld."""
+    def size(self) -> Union[int, range]:
+        """Valid size of this meld."""
         raise NotImplementedError
 
-    def __init__(self, tiles):
-        """Initialize the meld with its tiles and check validity."""
-        self.tiles = tiles[:]
-        self.tiles.sort()
+    tiles: Tuple[Tile, ...]
+
+    def __init__(self, tiles: Iterable[Tile]):
+        """Check validity upon initialization."""
+        self.tiles = tuple(sorted(tiles))
         self.check_meld()
 
-    def __str__(self):
+    @classmethod
+    def from_str(cls: Type[T], s: str) -> T:
+        """Meld.from_str('suit1/num1|...') -> Meld"""
+        return cls(map(Tile.from_str, s.split('|')))
+
+    def __str__(self) -> str:
         """str(meld) -> 'suit1/num1|suit2/num2|...'"""
-        return '|'.join(map(str, self.tiles))
+        tiles = list(self.tiles)
+        if isinstance(self, Wu):
+            for meld in self.fixed_melds:
+                tiles.extend(meld.tiles)
+        tiles.sort()
+        return '|'.join(map(str, tiles))
+
     __repr__ = __str__
 
-    def __eq__(self, other):
-        # not implemented for non-meld,
-        # but not equal for melds of different types
+    def __hash__(self) -> int:
+        return hash((type(self),) + self.tiles)
+
+    def __eq__(self, other: Meld) -> bool:
+        """Two Melds are equal if they are same type and same tiles."""
         if not isinstance(other, Meld):
             return NotImplemented
-        if not isinstance(other, type(self)):
-            return False
-        return sorted(self.tiles) == sorted(other.tiles)
+        return hash(self) == hash(other)
 
-    def check_meld(self):
+    def __lt__(self, other: Meld) -> bool:
+        order = [Wu, Kong, Pong, Chow, Eyes]
+        if type(self) is not type(other):
+            return order.index(type(self)) > order.index(type(other))
+        return self.tiles < other.tiles
+
+    def check_meld(self) -> None:
         """Check validity of the meld. Raises ValueError upon failure."""
-        raise NotImplementedError
-
-    def check_suit(self):
-        """Ensures all tiles are the same suit."""
-        suit = None
+        self.check_size()
         for tile in self.tiles:
-            if suit is not None and tile.suit != suit:
+            if isinstance(tile.suit, Bonuses):
+                raise ValueError('No Bonus tiles in a meld')
+
+    def check_size(self) -> None:
+        """Check that the meld is the right size."""
+        if isinstance(self.size, range) and isinstance(self, Wu):
+            size = len(self.tiles + tuple(
+                tile for meld in self.fixed_melds
+                for tile in meld.tiles))
+            if size not in self.size:
+                raise ValueError(f'{_tname(self)} must be '
+                                 f'[{self.size.start},{self.size.stop}) tiles')
+        else:
+            if len(self.tiles) != self.size:
+                raise ValueError(f'{_tname(self)} must be {self.size} tiles')
+
+    def check_suit(self) -> None:
+        """Check that all tiles are the same suit."""
+        suit = self.tiles[0].suit
+        for tile in self.tiles[1:]:
+            if tile.suit != suit:
                 raise ValueError(
-                    f'{type(self).__name__}s must be one suit: '
+                    f'{_tname(self)} must be all one suit: '
                     f'{suit} != {tile.suit}'
                 )
-            suit = tile.suit
 
 class _SameNum(Meld):
     """Base class that provides check_num method."""
 
-    @property
-    def size(self):
-        """Size of the same-numbered meld."""
-        raise NotImplementedError
-
-    def check_meld(self):
+    def check_meld(self) -> None:
         """Check validity of the meld."""
-        if len(self.tiles) != self.size:
-            raise ValueError(f'{type(self).__name__}s must be '
-                             f'{self.size} tiles, not {len(self.tiles)}')
+        super().check_meld()
         self.check_num()
 
-    def check_num(self):
-        """Ensures all tiles are the same number/value."""
+    def check_num(self) -> None:
+        """Check that all tiles are the same number/value."""
         self.check_suit()
-        num = None
-        for tile in self.tiles:
-            if num is not None and tile.number != num:
+        num = self.tiles[0].number
+        for tile in self.tiles[1:]:
+            if tile.number != num:
                 raise ValueError(
-                    f'{type(self).__name__}s must be all the same tile: '
+                    f'{_tname(self)}s must be the same tile: '
                     f'{num} != {tile.number}'
                 )
-            num = tile.number
 
 class Pong(_SameNum):
-    """Represents a Pong meld (three identical tiles)"""
+    """Represents a Pong (three identical tiles)"""
 
-    size = 3
+    size: int = 3
 
 class Kong(_SameNum):
-    """Represents a Kong meld (four identical tiles, counted as three)"""
+    """Represents a Kong (four identical tiles, counted as three)"""
 
-    size = 4
+    size: int = 4
 
-    def __str__(self):
-        """Kongs are represented by one faceup, two stacked down, one up"""
+    def __str__(self) -> str:
+        """Kongs are represented by one faceup, two stacked down, one faceup"""
         #pylint: disable=no-member
-        return '|'.join(map(str, [self.tiles[0], Misc.HIDDEN.value, self.tiles[-1]]))
+        return '|'.join(map(str, [
+            self.tiles[0], Misc.HIDDEN.value, self.tiles[-1]]))
         #pylint: enable=no-member
 
 class Chow(Meld):
-    """Represents a Chow meld (three tiles of the same suit with consecutive numbers)"""
+    """Represents a Chow (three tiles of the same suit with consecutive numbers)"""
 
-    size = 3
+    size: int = 3
 
-    def check_meld(self):
+    def check_meld(self) -> None:
         """Check validity as a Chow."""
-        if len(self.tiles) != self.size:
-            raise ValueError(f'Chows must be {self.size} tiles')
-        for tile in self.tiles:
-            if not isinstance(tile.suit, Simples):
-                raise ValueError(
-                    'Chows must be Simples only, '
-                    f'not {type(tile.suit).__name__}'
-                )
+        super().check_meld()
         self.check_suit()
-        num = None
-        for tile in self.tiles:
-            if num is not None and tile.number != num + 1:
-                raise ValueError(
-                    'Chows must be tiles with consecutive numbers: '
-                    f'{tile.number} != {num} + 1'
-                )
-            num = tile.number
+        if not isinstance(self.tiles[0].suit, Simples):
+            raise ValueError(
+                f'Chows can only be Simples, not {_tname(self.tiles[0].suit)}')
+        num = self.tiles[0].number
+        for i, tile in enumerate(self.tiles):
+            if tile.number != num + i:
+                raise ValueError('Chows must have consecutive numbers: '
+                                 f'{tile.number} != {num + i}')
 
 class Eyes(_SameNum):
-    """Represents an Eyes meld (two identical tiles), used only in winning hand)"""
+    """Represents a pair of Eyes (two identical tiles, only valid in winning hand)"""
 
-    size = 2
-
-class _CachedAttribute: # pylint: disable=too-few-public-methods
-    '''Computes attribute value and caches it in the instance.
-    From the Python Cookbook (Denis Otkidach)
-    This decorator allows you to create a property which can be computed once
-    and accessed many times. Sort of like memoization.
-    '''
-    def __init__(self, method, name=None):
-        """Initialize the cached attribute."""
-        # record the unbound-method and the name
-        self.method = method
-        self.name = name or method.__name__
-        self.__doc__ = method.__doc__
-    def __get__(self, inst, cls):
-        """Get the cached attribute."""
-        # self: <__main__._CachedAttribute object at 0xb781340c>
-        # inst: <__main__.Foo object at 0xb781348c>
-        # cls: <class '__main__.Foo'>
-        if inst is None:
-            # instance attribute accessed on class, return self
-            # You get here if you write `Foo.bar`
-            return self
-        # compute, cache and return the instance's attribute value
-        result = self.method(inst)
-        # setattr redefines the instance's attribute so this doesn't get called again
-        setattr(inst, self.name, result)
-        return result
+    size: int = 2
 
 class Wu(Meld):
-    """Represents a winning hand. Only meld that consists of sub-melds"""
+    """Represents a winning hand. This can only consist of sub-melds.
 
-    size = range(14, 19, 2) # winning is at least 14, at most 18
-    melds = [] # melds present in the hand
+    WARNING: for some hands, instantiating this class is NOT atomic.
+    So far I have discovered hands that take a full second or two.
+    Consider instantiating this class a blocking procedure, and
+    treat it as such, e.g. in asynchronous contexts.
+    """
 
-    #pylint: disable=too-many-branches,too-many-statements,too-many-locals
-    def check_meld(self):
-        """Check whether this hand is a winning hand."""
-        hand = self.tiles
-        if len(hand) not in self.size:
-            raise ValueError('Wus must be between 14 and 18, '
-                             'and a multiple of 2.')
-        shown = []
-        # split hand into simples and non-simples,
-        # because there's some optimization that can
-        # be done on non-simples
-        simples = [t for t in hand if isinstance(t.suit, Simples)]
-        others = [t for t in hand if not isinstance(t.suit, Simples)]
-        print(simples, others)
-        eyes_checked = False # 16 tiles can only be four Kongs
-        # Backtracking algorithm modified from https://stackoverflow.com/a/4941711/6605349
-        winning = [] # indexes of winning tiles
-        _shown = []
-        def backtrack(i=0, chowq=True):
-            nonlocal eyes_checked
-            _winning = [bunch[j] for j in winning if 0 <= j < len(bunch)]
-            _losing = [bunch[j] for j in range(len(bunch)) if j not in winning]
-            print('tracking into', i, '\n winning:', _winning, '\n losing:', _losing)
-            slen = len(bunch)
-            if all(idx in winning for idx in range(slen)):
-                print('bubbling')
-                return True # bubble up
-            while i < slen - Eyes.size + 1:
-                if i in winning: # don't look at winning tiles
-                    i += 1
-                    continue
-                try:
-                    _shown.append(Kong(bunch[i:i+Kong.size]))
-                except ValueError:
-                    pass # not a Kong, next test
-                else:
-                    winning.extend(range(i, i+Kong.size)) # mark Kong tiles as winning
-                    i += Kong.size # jump past winning tiles
-                    print(' track into Kong')
-                    if backtrack(i, chowq): # recursively backtrack
-                        print('backtrack from Kong')
-                        return True # return winning if recursive winning
-                    del winning[-Kong.size:] # otherwise unmark as winning
-                    if _shown:
-                        del _shown[-1]
-                try:
-                    _shown.append(Pong(bunch[i:i+Pong.size]))
-                except ValueError:
-                    pass # you get the drill
-                else:
-                    winning.extend(range(i, i+Pong.size))
-                    i += Pong.size
-                    print(' track into Pong')
-                    if backtrack(i, chowq):
-                        print('backtrack from Pong')
-                        return True
-                    del winning[-Pong.size:]
-                    if _shown:
-                        del _shown[-1]
-                if chowq:
-                    try:
-                        _shown.append(Chow(bunch[i:i+Chow.size]))
-                    except ValueError:
-                        pass
-                    else:
-                        winning.extend(range(i, i+Chow.size))
-                        i += Chow.size
-                        print(' track into Chow')
-                        if backtrack(i, chowq):
-                            print('backtrack from Chow')
-                            return True
-                        del winning[-Chow.size:]
-                        if _shown:
-                            del _shown[-1]
-                if not eyes_checked: # there can only be one pair of Eyes
-                    try:
-                        _shown.append(Eyes(bunch[i:i+Eyes.size]))
-                    except ValueError:
-                        pass
-                    else:
-                        winning.extend(range(i, i+Eyes.size))
-                        i += Eyes.size
-                        print(' track into Eyes')
-                        eyes_checked = True
-                        if backtrack(i, chowq):
-                            print('backtrack from Eyes')
-                            return True
-                        del winning[-Eyes.size:]
-                        if _shown:
-                            del _shown[-1]
-                            eyes_checked = False
-                i += 1
-            print('backtrack from none')
-            return False # all combinations have been checked
-        bunch = others
-        otherwon = backtrack(chowq=False)
-        print('others backtracked', otherwon)
-        winning = []
-        bunch = simples
-        simplwon = False
-        if not eyes_checked and simples:
-            print('eyes not yet checked')
-            # This algorithm from https://stackoverflow.com/a/4155177/6605349
-            # It's specific to tiles that can Chow
-            # sum of values of simples % 3 maps to possible
-            # values of eyes tiles
-            if len(hand) == 14:
-                values = ((3, 6, 9), (2, 5, 8), (1, 4, 7))
-                divisor = 3
-            elif len(hand) == 16:
-                values = (tuple(range(1, 10)),)
-                divisor = 1
-            elif len(hand) == 18:
-                values = ((2, 4, 6, 8), (), (1, 3, 5, 7, 9), ())
-                divisor = 4
-            total = sum(t.number + 1 for t in simples)
-            print(f'total: {total} divisor: {divisor} remainder: {total % divisor}'
-                  f' result: {values[total % divisor]}')
-            for eye_value in values[total % divisor]:
-                for i in range(len(simples) - Eyes.size + 1):
-                    if simples[i].number != eye_value - 1 or eye_value - 1 != simples[i+1].number:
-                        continue
-                    print('===\nChecking Eyes in:', simples[i:i+2], '\n===')
-                    try:
-                        shown.append(Eyes(simples[i:i+2]))
-                    except ValueError:
-                        pass # not Eyes, try next
-                    else:
-                        del simples[i:i+2]
-                        break # found Eyes, now time to try
-                if shown and isinstance(shown[-1], Eyes):
-                    if backtrack(): # valid winning hand!
-                        simplwon = True
-                        break
-                    else:
-                        # undo removal
-                        print('===\nEyes', shown[-1].tiles, 'failed\n===')
-                        simples.extend(shown[-1].tiles)
-                        del shown[-1]
-                        simples.sort()
-        elif simples: # no eyes removal necessary
-            print('eyes checked')
-            if backtrack(): # valid winning hand!
-                simplwon = True
-            else:
-                print('simples backtracked False')
-                raise ValueError('Simples tiles in this hand '
-                                 'invalidate a winning hand',
-                                 simples)
-        else: # no simples, default valid
-            print('no simples')
-            simplwon = True
-        print('simpl ended', simplwon)
-        wonning = otherwon and simplwon
-        shown.extend(_shown)
-        if not wonning: # still not valid as combination of melds
-            # time to try the special case: Thirteen Orphans
-            wonning = all(
-                [Tile(suit, 0) in hand and Tile(suit, 8) in hand
-                 for suit in Simples]
-                + [Tile(Honors.FENG, i) in hand for i in range(4)]
-                + [Tile(Honors.LONG, i) in hand for i in range(3)]
-            )
-        if not wonning:
-            raise ValueError('Not a winning hand', hand)
-        self.melds = shown
+    size = range(14, 19) # [14, 18]
+    melds: List[List[Meld]]
+    fixed_melds: List[Meld]
+    arrived: Optional[Tile]
 
-    @_CachedAttribute
-    def points(self):
-        """Number of points the hand is worth.
-        (Not including situational points or wind points.)
+    @property
+    def all_tiles(self) -> List[Tile]:
+        tiles = list(self.tiles)
+        for meld in self.fixed_melds:
+            tiles.extend(meld.tiles)
+        tiles.sort()
+        return tiles
+
+    def __init__(self, tiles: Iterable[Tile], melds: Iterable[Meld] = None,
+                 arrived: Tile = None, flags: WuFlag = WuFlag.CHICKEN_HAND):
+        """Check validity upon initialization."""
+        self.tiles = tuple(sorted(tiles))
+        self.fixed_melds = list(melds or [])
+        self.arrived = arrived
+        self.flags = flags
+        self.check_meld()
+
+    @classmethod
+    def from_str(
+        cls: Type[Wu], s: str, melds: Iterable[Meld] = None,
+        arrived: Tile = None, flags: WuFlag = WuFlag.CHICKEN_HAND
+    ) -> Wu:
+        """Wu.from_str('suit1/num1|...') -> Wu"""
+        return cls(
+            tiles=map(Tile.from_str, s.split('|')),
+            melds=melds, arrived=arrived, flags=flags)
+
+    def check_meld(self) -> None:
+        """Check that this hand is a winning hand.
+        Returns all possible winning combinations.
         """
-        # Rules from https://en.wikipedia.org/wiki/Hong_Kong_Mahjong_scoring_rules
-        hand = self.tiles
-        shown = self.melds
-        print('---', shown)
+        super().check_meld()
+        # sort each combo of melds, to make out-of-order duplicates
+        # equal, then pass them through a set to weed them out
+        self.melds = list(map(list, set(
+            tuple(sorted(combo)) for combo in self.valid_combos())))
+        if not self.melds:
+            raise ValueError('No valid combos')
+
+    def valid_combos(self) -> Iterator[List[Meld]]:
+        """Yield all possible winning sets of melds."""
+        tc = len(self.tiles)
+        checked = set()
+        for e1, e2 in combinations(range(tc), 2):
+            if e1 == e2:
+                continue
+            try:
+                test_eyes = Eyes((self.tiles[e1], self.tiles[e2]))
+            except ValueError:
+                continue
+            if test_eyes in checked:
+                continue
+            checked.add(test_eyes)
+            # tiles other than the eyes we're checking
+            ts = [x for i, x in enumerate(self.tiles) if i != e1 and i != e2]
+            possible = self.all_melds_pos(ts)
+            combos = combinations(possible, 4 - len(self.fixed_melds))
+            for combo in combos:
+                covered = {i for meld, idxs in combo for i in idxs}
+                if len(covered) != len(ts):
+                    continue
+                covered = [tile for meld, idxs in combo for tile in meld.tiles]
+                if len(covered) != len(ts):
+                    continue
+                melds = [meld for meld, idxs in combo] + list(self.fixed_melds)
+                melds.append(test_eyes)
+                yield melds
+        if set(self.tiles) > THIRTEEN_ORPHANS:
+            melds: List[Meld] = []
+            melds.append(_UncheckedWu(self.tiles))
+            yield melds
+
+    @staticmethod
+    def get_triplet(trip: List[Tile]) -> Union[Meld, None]:
+        """Try to get a meld."""
+        try:
+            return Pong(trip)
+        except ValueError:
+            pass
+        try:
+            return Chow(trip)
+        except ValueError:
+            pass
+        return None
+
+    def all_melds_pos(self, ts) -> List[Tuple[Meld, Tuple[int, int, int]]]:
+        """Get every possible meld and the indexes of their component cards.
+        Modified from
+        https://github.com/offe/py-mcr/blob/master/mahjonggrouping.py#L108-L121
+        """
+        trips = {}
+        tc = len(ts)
+        for t1, t2, t3 in combinations(range(tc), 3):
+            t1, t2, t3 = trip_idxs = tuple(sorted((t1, t2, t3)))
+            # already checked
+            if trip_idxs in trips:
+                continue
+            # not unique indexes
+            if len(set(trip_idxs)) != 3:
+                continue
+            trip = [ts[i] for i in trip_idxs]
+            meld = self.get_triplet(trip)
+            if isinstance(meld, Pong) and t3 < tc - 1:
+                old_idxs = trip_idxs
+                old_meld = meld
+                for t4 in range(t3 + 1, tc):
+                    trip_idxs = tuple(sorted((t1, t2, t3, t4)))
+                    if trip_idxs in trips or len(set(trip_idxs)) != 4:
+                        continue
+                    trip = [ts[i] for i in trip_idxs]
+                    try:
+                        meld = Kong(trip)
+                    except ValueError:
+                        continue
+                    else:
+                        break
+                else:
+                    trip_idxs = old_idxs
+                    meld = old_meld
+            if meld:
+                trips[trip_idxs] = meld
+        return sorted((i, j) for j, i in trips.items())
+
+    def faan(self, choice: Sequence[Meld],
+             winds: Tuple[int, int] = None) -> Tuple[int, WuFlag]:
+        """Number of faan points the Wu is worth.
+
+        Parameters
+        -----------
+        ``choice``: Sequence[Meld]
+            Which combination of melds from the possible
+            set to calculate the points for.
+        ``winds``: Optional[Tuple[int, int]]
+            If specified as (seat, prevailing), this provides the necessary
+            context to include the Seat Wind and Prevailing Wind Wu flags.
+
+        Returns
+        --------
+        Tuple[int, WuFlag]
+            (points, flags): flags represents all of the features of a Wu
+            that are true for this particular combination.
+        """
+        all_tiles = self.all_tiles
         points = 0
-        if all(
-                [Tile(suit, 0) in hand and Tile(suit, 8) in hand
-                 for suit in Simples]
-                + [Tile(Honors.FENG, i) in hand for i in range(4)]
-                + [Tile(Honors.LONG, i) in hand for i in range(3)]
-        ):
-            print('thirteen orphans')
-            points += 13 # Thirteen Orphans
-        if all(isinstance(meld, (Chow, Eyes)) for meld in shown):
-            print('common hand')
-            points += 1 # Common Hand
-        if all(isinstance(meld, (Pong, Eyes)) for meld in shown):
-            print('all in triplets')
-            points += 3 # All in Triplets
+        types = self.flags
+        if all(isinstance(meld, (Chow, Eyes)) for meld in choice):
+            points += 1
+            types |= WuFlag.COMMON_HAND
+        if all(isinstance(meld, (Pong, Kong, Eyes)) for meld in choice):
+            points += 3
+            types |= WuFlag.ALL_IN_TRIPLETS
         suit = None
         hon = False
-        for tile in hand:
+        all_one_suit = False
+        for tile in all_tiles:
             if isinstance(tile.suit, Honors):
                 hon = True
                 continue
@@ -353,145 +369,171 @@ class Wu(Meld):
             suit = tile.suit
         else:
             if hon and suit is None:
-                print('all honor tiles')
-                points += 10 # All Honor Tiles
+                # no regulars, only honors
+                points += 10
+                types |= WuFlag.ALL_HONOR_TILES
             elif not hon:
-                print('all one suit')
-                points += 7 # All One Suit
+                # no honors, only regulars
+                points += 7
+                types |= WuFlag.ALL_ONE_SUIT
             else:
-                print('mixed one suit')
-                points += 3 # Mixed One Suit
-        dragons = 0
-        winds = 0
-        drageyes = False
-        windeyes = False
-        for meld in shown:
-            if isinstance(meld, Pong):
-                if meld.tiles[0].suit == Honors.LONG:
-                    dragons += 1
-                elif meld.tiles[0].suit == Honors.FENG:
-                    winds += 1
-            if isinstance(meld, Eyes):
-                if meld.tiles[0].suit == Honors.LONG:
-                    drageyes = True
-                elif meld.tiles[0].suit == Honors.FENG:
-                    windeyes = True
-        if dragons == 3:
-            print('great dragons')
-            points += 8 # Great Dragons
-        elif dragons == 2 and drageyes:
-            print('small dragons')
-            points += 5 # Small Dragons
-        if winds == 4:
-            print('great winds')
-            points += 13 # Great Winds
-        elif winds == 3 and windeyes:
-            print('small winds')
-            points += 6 # Small Winds
-        kongs = True
-        pongs = True
-        for meld in shown:
-            if not isinstance(meld, (Kong, Eyes)):
-                kongs = False
-            if not isinstance(meld, (Pong, Eyes)):
-                pongs = False
-        if kongs:
-            print('all kongs')
-            points += 13 # All Kongs
-        if pongs:
-            print('self triplets')
-            points += 13 # Self Triplets
-        orphans = True
-        for meld in shown:
+                # regulars (but of one suit) and honors
+                points += 3
+                types |= WuFlag.MIXED_ONE_SUIT
+        long: List[Optional[type]] = [None, None, None]
+        for meld in choice:
             if isinstance(meld, Chow):
-                orphans = False
+                continue # can't be dragons
+            if meld.tiles[0].suit != Honors.LONG:
+                continue # not dragons
+            long[meld.tiles[0].number] = type(meld)
+        if all(long):
+            if not any(typ is Eyes for typ in long):
+                points += 8
+                types |= WuFlag.GREAT_DRAGONS
+            else:
+                points += 5
+                types |= WuFlag.SMALL_DRAGONS
+        feng: List[Optional[type]] = [None, None, None, None]
+        for meld in choice:
+            if isinstance(meld, Chow):
+                continue # can't be winds
+            if meld.tiles[0].suit != Honors.FENG:
+                continue # not winds
+            feng[meld.tiles[0].number] = type(meld)
+        if all(feng):
+            if not any(typ is Eyes for typ in feng):
+                points += 13
+                types |= WuFlag.GREAT_WINDS
+            else:
+                points += 10
+                types |= WuFlag.SMALL_WINDS
+        if len(choice) == 1: # only one possible way this can happen
+            points += 13
+            types |= WuFlag.THIRTEEN_ORPHANS
+        if all(isinstance(meld, (Kong, Eyes)) for meld in choice):
+            points += 13
+            types |= WuFlag.ALL_KONGS
+        if not self.fixed_melds and WuFlag.ALL_IN_TRIPLETS in types:
+            if WuFlag.SELF_DRAW in types or ( # self draw or
+                self.arrived is not None
+                # stolen discard not in regular melds,
+                and all(self.arrived not in meld
+                        for meld in choice
+                        if not isinstance(meld, Eyes))
+                # only eyes
+                and all(self.arrived in meld.tiles
+                        for meld in choice
+                        if isinstance(meld, Eyes))
+            ):
+                points += 8
+                types |= WuFlag.SELF_TRIPLETS
+        for meld in choice:
+            if isinstance(meld, Chow):
                 break
             if not isinstance(meld.tiles[0].suit, Simples):
-                orphans = False
                 break
-            if not meld.tiles[0].number in (0, 8):
-                orphans = False
+            if meld.tiles[0].number not in {0, 8}:
                 break
-        if orphans:
-            print('orphans')
-            points += 10 # Orphans
+        else:
+            # this hand counts 10 points and suppresses all in triplets.
+            # to handle this we just count it as 7 points since the hand
+            # itself implies all in triplets anyway
+            points += 7
+            types |= WuFlag.ORPHANS
         counts = [0, 0, 0, 0, 0, 0, 0, 0, 0]
         goals = [3, 1, 1, 1, 1, 1, 1, 1, 3]
-        suit = None
-        gates = True
-        for tile in hand:
-            if suit is not None and tile.suit != suit or not isinstance(tile.suit, Simples):
-                gates = False
+        suit = all_tiles[0].suit
+        if all_one_suit and isinstance(suit, Simples):
+            for tile in all_tiles:
+                counts[tile.number] += 1
+            diff = 0
+            for i in range(9):
+                if counts[i] == goals[i]:
+                    continue
+                if counts[i] == goals[i] + 1:
+                    diff += 1
+                    continue
                 break
-            suit = tile.suit
-            counts[tile.number] += 1
-        deductions = 0
-        for i in range(9):
-            if counts[i] not in (goals[i], goals[i]+1):
-                gates = False
-                break
-            if counts[i] == goals[i] + 1:
-                deductions += 1
-        if deductions != 1:
-            gates = False
-        if gates:
-            print('nine gates')
-            points += 10 # Nine Gates
-        # Time to score melds
-        print('---')
-        for meld in shown:
-            if isinstance(meld, (Pong, Kong)) and meld.tiles[0].suit == Honors.LONG:
-                print('dragon')
-                points += 1 # Dragon
-        orphans = True
-        for tile in hand:
-            if isinstance(tile.suit, Simples) and tile.number not in (0, 8):
-                orphans = False
-                break
-        if orphans:
-            print('mixed orphans')
-            points += 1 # Mixed Orphans
-        # scoring done, return
-        return points
+            else:
+                if diff == 1:
+                    # same deal with the points as Orphan
+                    points += 7
+                    types |= WuFlag.NINE_GATES
+        favorable = list({
+            'long/1': WuFlag.RED_DRAGON,
+            'long/2': WuFlag.GREEN_DRAGON,
+            'long/3': WuFlag.WHITE_DRAGON
+        }.items())
+        if winds is not None:
+            favorable.append((f'feng/{winds[0]+1}', WuFlag.SEAT_WIND))
+            favorable.append((f'feng/{winds[1]+1}', WuFlag.PREVAILING_WIND))
+        for meld in choice:
+            for s, flag in favorable:
+                if meld.tiles[0] == Tile.from_str(s):
+                    points += 1
+                    types |= flag
+        for tile in all_tiles:
+            if isinstance(tile.suit, Honors):
+                continue
+            if tile.number in {0, 8}:
+                continue
+            break
+        else:
+            points += 1
+            types |= WuFlag.MIXED_ORPHANS
+        if WuFlag.SELF_DRAW in types:
+            points += 1
+        if not self.fixed_melds:
+            points += 1
+            types |= WuFlag.ALL_FROM_WALL
+        if WuFlag.ROBBING_KONG in types:
+            points += 1
+        if WuFlag.LAST_CATCH in types:
+            points += 1
+        if WuFlag.BY_KONG in types:
+            points += 1
+        if WuFlag.DOUBLE_KONG in types:
+            points += 8
+        if WuFlag.HEAVENLY in types:
+            points += 13
+        if WuFlag.EARTHLY in types:
+            points += 13
+        return (points, types)
 
-    def situational_points(self, player):
-        """Number of points gained from the situation."""
-        shown = self.melds
-        points = 0
-        # wind points
-        for meld in shown:
-            if isinstance(meld, (Pong, Kong)) and meld.suit == Honors.FENG:
-                if meld.tiles[0].number == player.seat:
-                    print('seat wind')
-                    points += 1 # Seat Wind
-                #pylint: disable=protected-access
-                if meld.tiles[0].number == player._root.game.wind:
-                    print('prevailing wind')
-                    points += 1 # Prevailing Wind
-        # Self Triplets are assumed concealed in self.points,
-        # so deduct the points value here if they turn out
-        # to be revealed.
-        pongs = True
-        for meld in shown:
-            if not isinstance(meld, (Pong, Eyes)):
-                pongs = False
-            elif isinstance(meld, Pong) and meld in player.shown:
-                pongs = False # Self Triplets must be concealed
-        if not pongs:
-            print('deduct self triplets')
-            points -= 13
-        # bonus points
-        hua = [False, False, False, False]
-        gui = hua[:]
-        for tile in player.bonus:
-            if tile.number == player.seat:
-                points += 1
-            if tile.suit == Bonuses.HUA:
-                hua[tile.number] = True
-            if tile.suit == Bonuses.GUI:
-                gui[tile.number] = True
-        if all(hua):
-            points += 1
-        if all(gui):
-            points += 1
-        return points
+    def max_faan(self, winds: Tuple[int, int] = None) \
+        -> Tuple[List[Meld], int, WuFlag]:
+        return max(
+            ((choice, *self.faan(choice, winds)) for choice in self.melds),
+            key=lambda trip: trip[1])
+
+class _UncheckedWu(Wu):
+    size = range(13, 19)
+
+    def __init__(
+        self, tiles: Iterable[Tile], melds: Iterable[Meld] = None, *_, **__
+    ):
+        """Don't check validity, that's the whole point"""
+        self.tiles = tuple(sorted(tiles)) + tuple(
+            tile for meld in (melds or []) for tile in meld.tiles)
+
+# special case: 1 & 9 of each suit + every value of honors suits
+THIRTEEN_ORPHANS = set(_UncheckedWu.from_str(
+    'tong/1|tong/9|zhu/1|zhu/9|wan/1|wan/9|'  # simples
+    'feng/1|feng/2|feng/3|feng/4|long/1|long/2|long/3'  # honors
+).tiles)
+
+if 0:
+    # TODO: figure out why one particular one takes multiple seconds:
+    # 1.25s (3.94s when debug): tong/1|tong/1|tong/1|tong/2|tong/2|tong/2|tong/3|tong/3|tong/3|tong/4|tong/4|tong/4|tong/5|tong/5
+    # Note that fixing even one meld reduces it to atomic:
+    # 0.02s: tong/1|tong/1|tong/1 + tong/2|tong/2|tong/2|tong/3|tong/3|tong/3|tong/4|tong/4|tong/4|tong/5|tong/5
+    # Other timing tests follow
+    # 0.00s: tong/1|tong/9|zhu/1|zhu/9|wan/1|wan/9|feng/1|feng/2|feng/3|feng/4|long/1|long/2|long/3|wan/2
+    # 0.08s: wan/1|wan/1|wan/1|wan/2|wan/3|wan/4|wan/4|wan/5|wan/6|wan/7|wan/8|wan/9|wan/9|wan/9
+    # 0.18s: tong/1|tong/2|tong/3|tong/2|tong/3|tong/4|tong/5|tong/6|tong/7|tong/8|tong/8|tong/8|tong/4|tong/4
+    # 0.32s: feng/1|feng/1|feng/1|feng/1|feng/2|feng/2|feng/2|feng/2|feng/3|feng/3|feng/3|feng/3|feng/4|feng/4|feng/4|feng/4|long/1|long/1
+    # 0.17s: tong/1|tong/1|tong/1|wan/9|wan/9|wan/9|zhu/5|zhu/5|zhu/5|tong/2|tong/2|tong/2|long/1|long/1
+    # 0.00s: zhu/3|zhu/4|zhu/5,zhu/5|zhu/6|zhu/7,zhu/7|zhu/8|zhu/9 + feng/3|feng/3|zhu/4|zhu/5|zhu/6
+    # 0.55s: wan/2|wan/2|wan/2|tong/1|tong/1|tong/1|tong/1|tong/2|tong/3|tong/2|tong/2|tong/2|tong/3|tong/3
+    pass

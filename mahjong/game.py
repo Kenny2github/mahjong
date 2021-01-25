@@ -1,215 +1,456 @@
-"""Contains the Game and Round classes."""
-
+"""All game-process-related classes."""
+from __future__ import annotations
+from enum import Enum
+from typing import Generator, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
+from itertools import combinations
 import random
-from collections import namedtuple
-from .melds import Kong, Pong, Chow, Wu
-from .tiles import Honors, Simples, Bonuses, Tile
-from .players import Players, PLAYERS
+from .tiles import BonusTile, Bonuses, Honors, Simples, Tile, Wind
+from .melds import Chow, Kong, Meld, Pong, Wu, WuFlag
+from .players import Player
 
-__version__ = "0.0.1"
+# This is a really big file, but there's no way around it:
+# All of the classes depend on each other, so there's
+# a lot of circular imports if they are in different files.
 
-Turn = namedtuple('Turn', [
-    'next', 'discard', 'jump'
-])
-Turn.__doc__ = """
-    0 - next player whose turn it is
-    1 - index in previous player's hand, of previous player's discard
-    2 - (player, meld_type)s who could steal the turn, in priority order
-"""
+__all__ = [
+    'TurnEnding',
+    'HandEnding',
+    'Question',
+    'UserIO',
+    'HandResult',
 
-def meld_possible(hand, meld_type=None, frozen=None):
-    """If a meld of meld_type is possible, return (that meld, index found).
-    Otherwise, return None.
+    'Game',
+    'Round',
+    'Hand',
+    'Turn',
+]
 
-    If meld_type is None, checks all meld types except Eyes,
-    in Mahjong order of precedence: Kong, Pong, Chow.
-    """
-    hand.sort()
-    if meld_type is None:
-        for mtype in (Kong, Pong, Chow):
-            possible = meld_possible(hand, mtype, frozen)
-            if possible is not None:
-                return possible
-        return None
-    if frozen is not None:
-        frozen = [frozen]
-        dsize = -1
-    else:
-        frozen = []
-        dsize = 0
-    for i in range(len(hand) - meld_type.size + 1 + dsize):
+# data classes
+
+class Answerable:
+    """ABC for yielded objects that passthru generator sending."""
+    gen: Generator
+    def answer(self: YieldType, ans=None) -> YieldType:
+        """Send the answer to the internal generator."""
         try:
-            possible = (meld_type(hand[i:i + meld_type.size + dsize] + frozen), i)
-        except ValueError:
-            pass
-        else:
-            break
-    else:
-        possible = None
-    return possible
+            return self.gen.send(ans)
+        except StopIteration:
+            return None
 
-class Round:
-    """Represents one round/hand of Mahjong."""
+class TurnEnding(NamedTuple):
+    winner: Optional[Player] = None
+    discard: Optional[Tile] = None
+    seat: Optional[int] = None
+    wu: Optional[Wu] = None
+    jumped_with: Optional[Meld] = None
+    offered: bool = False
 
-    wall = []
-    discard = []
-    players = None
-    # wind = 0 => east wind
-    # wind = 1 => south wind
-    # wind = 2 => west wind
-    # wind = 3 => north wind
-    wind = 0
-    game_gen = None # generator that powers the game
-    end = None # end results
+class HandEnding(NamedTuple):
+    result: HandResult
+    gen: Generator
+    winner: Optional[Player] = None
+    wu: Optional[Wu] = None
+    choice: Optional[List[Meld]] = None
 
-    def __init__(self, wind=0):
-        """Shuffle a new wall and initialize players."""
-        self.wind = wind
-        self.shuffle()
-        self.players = Players(self)
+    def answer(self, ans=None):
+        return Answerable.answer(self, ans)
 
-    def shuffle(self):
-        """Create and shuffle a new wall. Called at initialization."""
-        wall = []
-        # simples
-        for suit in Simples:
-            for num in range(1, 10):
-                wall.extend([Tile(suit, num) for _ in range(4)])
-        # honors
-        for wind in range(4): # east, south, west, north
-            wall.extend([Tile(Honors.FENG, wind) for _ in range(4)])
-        for dragon in range(3): # zhong, fa, ban
-            wall.extend([Tile(Honors.LONG, dragon) for _ in range(4)])
-        # bonuses
-        for i in range(4):
-            wall.append(Tile(Bonuses.HUA, i))
-            wall.append(Tile(Bonuses.GUI, i))
-        random.shuffle(wall)
-        self.wall = wall
+class Question(Enum):
+    MELD_FROM_DISCARD_Q = 16
+    SHOW_EKFCP_Q = 23
+    SHOW_EKFEP_Q = 24
+    DISCARD_WHAT = 27
+    ROB_KONG_Q = 33
+    WHICH_WU = 40
+    READY_Q = 0
 
-    def run(self):
-        """Run the game. Returns a generator
+class UserIO(NamedTuple, Answerable):
+    question: Question
+    gen: Generator
+    melds: Union[List[Meld], List[List[Meld]], None] = None
+    player: Optional[Player] = None
+    arrived: Optional[Tile] = None
+    last_meld: Optional[Meld] = None
 
-        Every generator iteration accepts one send() value, a 2-tuple of:
-        0 - the index in the last player's hand of the tile discarded by last player
-        1 - None, or a 2-tuple of:
-            0 - the player to skip to (could still be next player in line)
-            1 - the type of meld that they can make
+    @property
+    def hand(self) -> List[Tile]:
+        """Shortcut to .player.hand"""
+        return self.player.hand
 
-        Yields a Turn namedtuple.
+    @property
+    def shown(self) -> List[Meld]:
+        """Shortcut to .player.shown"""
+        return self.player.shown
 
-        The flow of the game is as follows.
-        Note: "yielded" is equivalent to "returned from advance()"
-         1. (Player X, index of tile discarded in previous player's hand,
-            (player to jump to, meld they could make)s) yielded
-            * When returned from first_turn(), 2nd element is None
-            * Player.draw contains index in Player.hand of tile
-              drawn from wall. Can be None
-         2. If 3rd element is non-empty, ask each player in it whether
-            they want to do that meld. If Player J does:
-             1. Ask Player J which tile to discard (which cannot be in the meld)
-             2. Send (index of tile discarded in Player J's hand,
-                3rd element element containing Player J) to generator
-             3. Meld is added to Player J's shown melds and discard tile is discarded
-             4. Back to root 1, where X=J+1
-         3. Otherwise, ask Player X which tile to discard
-         4. Send (index of tile discarded in Player X's hand, None) to generator
-         5. Back to 1, where X=X+1
-        """
-        seat = 0
-        play = self.players[seat]
-        discard, jump = yield Turn(
-            play, None,
-            # only Kong possible to reveal from draw
-            [(play, Kong)] if meld_possible(play.hand, Kong) else []
-        )
-        if jump is not None:
-            raise ValueError('Cannot jump to a player before first turn')
-        while 1:
-            cont = True
-            discard_tile = play.hand.pop(discard)
-            while (jump is None and cont) or (jump is not None and play != jump[0]):
-                seat += 1
-                seat %= PLAYERS
-                play = self.players[seat]
-                cont = False
-            if jump is None: # truly discarded
-                self.discard.append(discard_tile)
-                draw = self.wall.pop(0)
-                while isinstance(draw.suit, Bonuses):
-                    play.bonus.append(draw)
-                    draw = self.wall.pop(0)
-                play.hand.append(draw)
-                play.draw = play.hand.index(draw)
-            else:
-                possible, idx = meld_possible(play.hand, jump[1])
-                play.shown.append(possible)
-                del play.hand[idx:idx+jump[1].size]
-                if jump[1] is Kong:
-                    # creating a Kong reduces your effective tile count by 1
-                    # so replenish a tile from the end of the wall
-                    play.hand.append(self.wall.pop())
-            jumpers = [
-                None, # win
-                None, # pong/kong
-                None, # chow
-            ]
-            idxx = self.players.players.index(play)
-            for idx, i in enumerate(self.players):
-                if meld_possible(i.hand, Wu, discard_tile):
-                    jumpers[0] = (i, Wu)
-                elif meld_possible(i.hand, Kong, discard_tile):
-                    jumpers[1] = (i, Kong)
-                elif meld_possible(i.hand, Pong, discard_tile):
-                    jumpers[1] = (i, Pong)
-                # chow can only be by next player
-                elif idx == idxx + 1 and meld_possible(i.hand, Chow, discard_tile):
-                    jumpers[2] = (i, Chow)
-            discard, jump = yield Turn(
-                play, discard,
-                meld_possible(play.hand),
-                [i for i in jumpers if i is not None]
-            )
+    def answer(self, ans=None):
+        return Answerable.answer(self, ans)
 
-    def start(self):
-        """Start the game (make it ready for use with first_turn() and advance()"""
-        self.game_gen = self.run()
+    def __repr__(self) -> str:
+        return f'UserIO(question={self.question}, melds={self.melds}, '\
+            f'arrived={self.arrived}, player={self.player})'
 
-    def first_turn(self):
-        """Advance the first turn.
-        Return value is run() yield value.
-        """
-        if self.game_gen is None:
-            self.start()
-        return next(self.game_gen)
+class HandResult(Answerable, Enum):
+    """The result of a hand."""
+    NORMAL = 0
+    GOULASH = 1
+    DEALER_WON = 2
 
-    def advance(self, discard, jump=None):
-        """Advance one turn.
-        Return value is run() yield value,
-        discard parameter is run() send value.
-        Raises StopIteration when game is over - look at .end value
-        """
-        if self.game_gen is None:
-            raise RuntimeError('Trying to advance turns in a nonexistent game')
-        try:
-            return self.game_gen.send((discard, jump))
-        except StopIteration as exc:
-            self.end = exc.value
-            raise
+YieldType = Union[UserIO, HandEnding, Answerable, None]
+
+# game process classes
 
 class Game:
     """Represents an entire game (consisting of at least 16 Rounds)."""
 
-    def __init__(self):
-        """Get everything ready to start the game."""
-        self.round = Round()
+    round: Round
 
-    def next_round(self):
-        """Prepare for the next round of the game."""
-        self.round.wind += 1
-        self.round.shuffle()
-        self.round.players.init_players()
+    def __init__(self, **house_rules):
+        self.init_players()
+        self.extra_hands = house_rules.pop('extra_hands', True)
 
-    def start(self):
-        """Start the next round."""
-        self.round.start()
+    def play(self) -> UserIO:
+        """Play the game!
+
+        Starts and stores a generator.
+        Returns the first request for user input.
+        """
+        if hasattr(self, 'gen'):
+            raise RuntimeError('Game already started!')
+        self.gen = self.execute()
+        question = next(self.gen)
+        if isinstance(question, UserIO):
+            return question
+        raise RuntimeError('This should never happen. Contact the developer.')
+
+    def execute(self):
+        """Generator-coroutine-based interface to play the game."""
+        for i in range(4): # Step 01, 03
+            self.round = Round(self)
+            yield from self.round.execute(i) # Step 02
+            yield UserIO(Question.READY_Q, self.gen)
+
+
+    def init_players(self) -> None:
+        """Setup players."""
+        self.players = [Player(i) for i in range(4)]
+
+class Round:
+    """Represents one four-hand round of Mahjong."""
+
+    hand: Hand
+    game: Game
+    wind: Wind
+
+    def __init__(self, game: Game):
+        self.game = game
+
+    def execute(self, wind: int):
+        """Play at least four hands."""
+        self.wind = Wind(wind)
+        i = int(self.wind)
+        j = 0
+        while j < 4: # Step 07
+            self.hand = Hand(self)
+            result: HandEnding = (yield from self.hand.execute(i)) # Step 05
+            if result.result is HandResult.NORMAL: # Step 06
+                i += 1 # Step 04
+                j += 1
+            elif not self.game.extra_hands: # house rules
+                i += 1
+                j += 1
+            i %= 4
+            yield result
+
+class Hand:
+    """Represents one full hand of Mahjong."""
+
+    turn: Turn
+    round: Round
+    wall: List[Tile]
+    discarded: List[Tile]
+    ending: Optional[TurnEnding] = None
+    turncount: Optional[int] = None
+
+    def __init__(self, round: Round):
+        self.round = round
+
+    def execute(self, wind: int):
+        """Play a hand till it ends."""
+        self.wind = Wind(wind)
+        self.shuffle() # Step 08
+        self.deal() # Step 09
+        # Sets up Step 12
+        ending: TurnEnding = TurnEnding(seat=self.wind)
+        self.turncount = 0
+        while ending.winner is None and self.wall:
+            self.turn = Turn(self)
+            # Step 13
+            ending = (yield from self.turn.execute(ending, self.turncount))
+            self.turncount += 1
+        self.ending = ending
+        # Step 15
+        if ending.winner is None and not self.wall:
+            # tie
+            return HandEnding(HandResult.GOULASH, self.round.game.gen)
+        if len(self.wall) <= 1:
+            ending.wu.flags |= WuFlag.LAST_CATCH
+        if len(ending.wu.melds) > 1:
+            question = UserIO(Question.WHICH_WU, self.round.game.gen,
+                              melds=ending.wu.melds)
+            answer = (yield question)
+        else:
+            answer = ending.wu.melds[0]
+        if ending.winner is self.round.game.players[self.wind]:
+            return HandEnding(
+                HandResult.DEALER_WON, self.round.game.gen,
+                ending.winner, ending.wu, answer)
+        return HandEnding(
+            HandResult.NORMAL, self.round.game.gen, ending.winner, ending.wu, answer)
+
+    def shuffle(self):
+        """Generate and shuffle a new wall."""
+        wall = []
+        # simples
+        for suit in Simples:
+            for num in range(9):
+                wall.extend([Tile(suit, num) for _ in range(4)])
+        # honors
+        for wind in range(4):
+            wall.extend([Tile(Honors.FENG, wind) for _ in range(4)])
+        for dragon in range(3):
+            wall.extend([Tile(Honors.LONG, dragon) for _ in range(4)])
+        # bonuses
+        for i in range(4):
+            wall.append(BonusTile(Bonuses.HUA, i))
+            wall.append(BonusTile(Bonuses.GUI, i))
+        random.shuffle(wall)
+        self.wall = wall
+        self.discarded = []
+
+    def deal(self):
+        players = self.round.game.players
+        for player in players:
+            player.__init__(player.seat)
+        # Step 09
+        for _ in range(13):
+            for player in players:
+                player.draw(self.wall)
+        for player in players:
+            player.hand.sort()
+
+class Turn:
+    """Handles the turn."""
+
+    hand: Hand
+
+    def __init__(self, hand: Hand):
+        self.hand = hand
+        self.players = self.hand.round.game.players
+        self.gen = self.hand.round.game.gen
+
+    def execute(self, last_ending: TurnEnding, turncount: int):
+        if last_ending.seat is None:
+            raise ValueError('Must have valid seat')
+        player = self.players[last_ending.seat]
+        meld: Optional[Meld] = None
+        if last_ending.jumped_with is not None and last_ending.discard is not None:
+            meld = last_ending.jumped_with
+            self.hand.discarded.pop() # Step 18
+            player.show_meld(last_ending.discard, meld)
+        elif last_ending.discard is not None and not last_ending.offered:
+            # Step 16
+            meld: Optional[Meld] = (yield from self.melds_from_discard(
+                player, last_ending))
+        if isinstance(meld, Wu):
+            if turncount == 1:
+                meld.flags |= WuFlag.EARTHLY
+            return TurnEnding(winner=player, wu=meld)
+        if isinstance(meld, Kong):
+            wu, winner = (yield from self.check_kong_robbers(meld, player))
+            if wu is not None:
+                return TurnEnding(winner=winner, wu=wu)
+        if isinstance(meld, Kong) or meld is None:
+            arrived = None
+            kong: Optional[Kong] = None
+            tries = 0
+            wu, winner = None, None
+            while 1:
+                try:
+                    drawn = player.draw(self.hand.wall) # Step 20
+                except IndexError: # goulash time
+                    return TurnEnding()
+                try:
+                    flags = WuFlag.SELF_DRAW
+                    if tries == 0 and turncount == 0:
+                        flags |= WuFlag.HEAVENLY
+                    elif tries == 1:
+                        flags |= WuFlag.BY_KONG
+                    elif tries > 1:
+                        flags |= WuFlag.DOUBLE_KONG
+                    return TurnEnding(winner=player, wu=Wu(
+                        player.hand, player.shown, drawn, flags))
+                except ValueError:
+                    pass
+                arrived = drawn
+                kong = (yield from self.check_ekfp(drawn, player))
+                if kong is None:
+                    break
+                player.shown.append(kong)
+                wu, winner = (yield from self.check_kong_robbers(kong, player))
+                if wu is not None:
+                    return TurnEnding(winner=winner, wu=wu)
+                tries += 1
+            del tries, flags, kong, wu, winner
+        else:
+            arrived = last_ending.discard
+        player.hand.sort() # Step 26
+        question = UserIO(Question.DISCARD_WHAT, self.gen,
+                          player=player, arrived=arrived, last_meld=meld)
+        answer: Tile = (yield question) # Step 27
+        # Step 28
+        player.hand.remove(answer)
+        self.hand.discarded.append(answer)
+        # Step 29
+        thief, meld = (yield from self.check_others_melds(answer, player))
+        if thief is None and isinstance(meld, bool):
+            # Step 14
+            return TurnEnding(discard=answer, offered=meld,
+                          seat=(player.seat + 1) % 4)
+        # Step 31
+        if isinstance(meld, Wu):
+            return TurnEnding(winner=thief, wu=meld)
+        return TurnEnding(discard=answer, seat=thief.seat, jumped_with=meld)
+
+    def melds_from_discard(self, player: Player, last_ending: TurnEnding):
+        """Check for possible melds to make from the discard tile."""
+        if last_ending.discard is None:
+            return None
+        melds: List[Meld] = []
+        for pair in combinations(player.hand, 2):
+            meld = Wu.get_triplet([*pair, last_ending.discard])
+            if meld is not None and meld not in melds:
+                melds.append(meld)
+        for triplet in combinations(player.hand, 3):
+            if all(tile == last_ending.discard for tile in triplet):
+                # Exposed Kong
+                meld = Kong([*triplet, last_ending.discard])
+                if meld not in melds:
+                    melds.append(meld)
+        if melds:
+            # Step 17
+            question = UserIO(Question.MELD_FROM_DISCARD_Q, self.gen,
+                              melds, player, last_ending.discard)
+            answer: Optional[Meld] = (yield question)
+            if answer is not None:
+                self.hand.discarded.pop() # Step 18
+                player.show_meld(last_ending.discard, answer)
+            return answer
+        try:
+            return Wu(player.hand, player.shown, last_ending.discard)
+        except ValueError:
+            return None
+
+    def check_ekfp(self, draw: Tile, player: Player):
+        """Check whether an Exposed Kong From (any) Pong is possible."""
+        kongs: List[Meld] = []
+        for quadruplet in combinations(player.hand, 4):
+            if all(tile == quadruplet[0] for tile in quadruplet):
+                # Exposed Kong From Concealed Pong
+                kong = Kong(quadruplet)
+                kongs.append(kong)
+        if kongs:
+            question = UserIO(Question.SHOW_EKFCP_Q, self.gen,
+                              melds=kongs, player=player, arrived=draw)
+            answer: Optional[Kong] = (yield question)
+            if answer is not None:
+                for tile in answer.tiles:
+                    player.hand.remove(tile)
+                return answer
+            kongs = []
+        for meld in player.shown:
+            if not isinstance(meld, Pong):
+                continue
+            try:
+                match = player.hand.index(meld.tiles[0])
+            except ValueError:
+                continue
+            if meld.tiles[0] in player.hand:
+                kong = Kong(meld.tiles + (player.hand[match],))
+                kongs.append(kong)
+        if kongs:
+            question = UserIO(Question.SHOW_EKFEP_Q, self.gen,
+                              melds=kongs, player=player, arrived=draw)
+            answer: Optional[Kong] = (yield question)
+            if answer is not None:
+                player.shown.remove(Pong(answer.tiles[:3]))
+                player.hand.remove(answer.tiles[0])
+            return answer
+        return None
+
+    def check_kong_robbers(self, kong: Kong, victim: Player):
+        """Check for anyone who could potentially rob the Kong for a win."""
+        tile = kong.tiles[0] # any tile will do
+        for p in self.players:
+            if p is victim:
+                continue
+            try:
+                wu = Wu(p.hand + [tile], p.shown, tile, WuFlag.ROBBING_KONG)
+            except ValueError:
+                continue
+            question = UserIO(Question.ROB_KONG_Q, self.gen,
+                              melds=[wu], player=p)
+            answer: bool = (yield question)
+            if answer:
+                return (wu, p)
+        return (None, None)
+
+    def check_others_melds(self, discard: Tile, victim: Player):
+        """Check for anyone who could potentially meld from the discard."""
+        overall: Mapping[Player, List[Meld]] = {}
+        for player in self.players:
+            if player is victim:
+                continue
+            melds: List[Meld] = overall.setdefault(player, [])
+            for pair in combinations(player.hand, 2):
+                try:
+                    meld = Pong([*pair, discard])
+                except ValueError:
+                    pass
+                else:
+                    if meld not in melds:
+                        melds.append(meld)
+                if player is self.players[(victim.seat + 1) % 4]:
+                    try:
+                        meld = Chow([*pair, discard])
+                    except ValueError:
+                        continue
+                    if meld not in melds:
+                        melds.append(meld)
+            for triplet in combinations(player.hand, 3):
+                try:
+                    meld = Kong([*triplet, discard])
+                except ValueError:
+                    continue
+                if meld not in melds:
+                    melds.append(meld)
+            try:
+                wu = Wu([*player.hand, discard], player.shown, discard)
+            except ValueError:
+                pass
+            else:
+                if wu not in melds:
+                    melds.append(wu)
+        for melds in overall.values():
+            melds.sort()
+        pairs: List[Tuple[Player, Meld]] = [
+            (p, melds[0]) for p, melds in overall.items() if melds]
+        pairs.sort(key=lambda i: i[1])
+        for player, meld in pairs:
+            # Step 30, 32
+            question = UserIO(
+                Question.MELD_FROM_DISCARD_Q, self.gen, melds=overall[player],
+                player=player, arrived=discard)
+            answer: Optional[Meld] = (yield question)
+            if answer is not None:
+                return (player, answer)
+        return (None, bool(overall[self.players[(victim.seat + 1) % 4]]))

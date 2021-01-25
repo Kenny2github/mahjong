@@ -12,27 +12,44 @@ Example Usage
     >>> game = mahjong.Game()
 """
 
-__version__ = "0.0.1"
+__version__ = "1.0.0"
 __all__ = [
+    'TurnEnding',
+    'HandEnding',
+    'Question',
+    'UserIO',
+    'HandResult',
+
     'Game',
     'Round',
+    'Hand',
     'Turn',
-    'Players',
-    'Player',
+
+    'Suit',
+    'Simples',
+    'Honors',
+    'Bonuses',
+    'Misc',
+    'Wind',
+    'Dragon',
+    'Flower',
+    'Season',
+    'ORDER',
+    'Number',
+
+    'Tile',
+    'BonusTile',
+
+    'WuFlag',
+    'Meld',
     'Pong',
     'Kong',
     'Chow',
     'Eyes',
     'Wu',
-    'Tile',
-    'Simples',
-    'Honors',
-    'Bonuses',
-    'Misc',
-    'Meld',
 ]
 
-from .game import Game, Round, Turn
-from .players import Players, Player
-from .melds import Meld, Pong, Kong, Chow, Eyes, Wu
-from .tiles import Tile, Simples, Honors, Bonuses, Misc
+from .players import *
+from .melds import *
+from .tiles import *
+from .game import *
