@@ -9,6 +9,7 @@ Example Usage
 =============
 
 .. code-block:: python
+
     >>> import mahjong
     >>> game = mahjong.Game()
     >>> question = game.play()
