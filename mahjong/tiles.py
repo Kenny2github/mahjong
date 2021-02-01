@@ -94,9 +94,10 @@ class Tile:
     def from_str(cls, s: str) -> Tile:
         """Tile.from_str('suit/number') -> Tile"""
         suit_s, number_s = s.split('/')
+        suit: Suit = Misc.UNKNOWN
         for num in (Simples, Honors, Bonuses, Misc):
             try:
-                suit: Suit = num(suit_s)
+                suit = num(suit_s)
             except ValueError:
                 continue
             else:
