@@ -89,7 +89,7 @@ class UserIO(NamedTuple, Answerable):
         return f'UserIO(question={self.question}, melds={self.melds}, '\
             f'arrived={self.arrived}, player={self.player})'
 
-class HandResult(Answerable, Enum):
+class HandResult(Enum):
     """The result of a hand."""
     NORMAL = 0
     GOULASH = 1
@@ -100,7 +100,7 @@ YieldType = Union[UserIO, HandEnding, Answerable, None]
 # game process classes
 
 class Game:
-    """Represents an entire game (consisting of at least 16 Rounds)."""
+    """Represents an entire game (consisting of 4 Rounds)."""
 
     round: Round
 
@@ -135,7 +135,7 @@ class Game:
         self.players = [Player(i) for i in range(4)]
 
 class Round:
-    """Represents one four-hand round of Mahjong."""
+    """Represents one four(+)-hand round of Mahjong."""
 
     hand: Hand
     game: Game
