@@ -44,6 +44,7 @@ class TurnEnding(NamedTuple):
     wu: Optional[Wu] = None
     jumped_with: Optional[Meld] = None
     offered: bool = False
+    prev_seat: Optional[int] = None
 
 class HandEnding(NamedTuple):
     result: HandResult
@@ -288,8 +289,7 @@ class Turn:
                     elif tries > 1:
                         flags |= WuFlag.DOUBLE_KONG
                     return TurnEnding(winner=player, wu=Wu(
-                        player.hand, player.shown, drawn,
-                        last_ending.seat, flags))
+                        player.hand, player.shown, drawn, None, flags))
                 except ValueError:
                     pass
                 arrived = drawn
@@ -316,11 +316,12 @@ class Turn:
         if thief is None and isinstance(meld, bool):
             # Step 14
             return TurnEnding(discard=answer, offered=meld,
-                          seat=(player.seat + 1) % 4)
+                          seat=(player.seat + 1) % 4, prev_seat=player.seat)
         # Step 31
         if isinstance(meld, Wu):
             return TurnEnding(winner=thief, wu=meld)
-        return TurnEnding(discard=answer, seat=thief.seat, jumped_with=meld)
+        return TurnEnding(discard=answer, seat=thief.seat,
+                          jumped_with=meld, prev_seat=player.seat)
 
     def melds_from_discard(self, player: Player, last_ending: TurnEnding):
         """Check for possible melds to make from the discard tile."""
@@ -347,7 +348,8 @@ class Turn:
                 player.show_meld(last_ending.discard, answer)
             return answer
         try:
-            return Wu(player.hand, player.shown, last_ending.discard)
+            return Wu(player.hand, player.shown,
+                      last_ending.discard, last_ending.prev_seat)
         except ValueError:
             return None
 
@@ -435,7 +437,7 @@ class Turn:
                 if meld not in melds:
                     melds.append(meld)
             try:
-                wu = Wu([*player.hand, discard], player.shown, discard)
+                wu = Wu([*player.hand, discard], player.shown, discard, player.seat)
             except ValueError:
                 pass
             else:
