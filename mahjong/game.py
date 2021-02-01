@@ -288,7 +288,8 @@ class Turn:
                     elif tries > 1:
                         flags |= WuFlag.DOUBLE_KONG
                     return TurnEnding(winner=player, wu=Wu(
-                        player.hand, player.shown, drawn, flags))
+                        player.hand, player.shown, drawn,
+                        last_ending.seat, flags))
                 except ValueError:
                     pass
                 arrived = drawn
@@ -394,7 +395,7 @@ class Turn:
             if p is victim:
                 continue
             try:
-                wu = Wu(p.hand + [tile], p.shown, tile, WuFlag.ROBBING_KONG)
+                wu = Wu(p.hand + [tile], p.shown, tile, victim.seat, WuFlag.ROBBING_KONG)
             except ValueError:
                 continue
             question = UserIO(Question.ROB_KONG_Q, self.gen,

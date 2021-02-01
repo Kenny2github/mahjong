@@ -2,8 +2,8 @@
 from __future__ import annotations
 from enum import Flag, auto
 from itertools import combinations
-from typing import Optional, Sequence, Set, Union, Iterable, List, Iterator, TypeVar, Type, Tuple
-from .tiles import Dragon, Honors, Tile, Simples, Bonuses, Misc
+from typing import Optional, Sequence, Union, Iterable, List, Iterator, TypeVar, Type, Tuple
+from .tiles import Honors, Tile, Simples, Bonuses, Misc, Wind
 
 __all__ = [
     'WuFlag',
@@ -205,6 +205,8 @@ class Wu(Meld):
     melds: List[List[Meld]]
     fixed_melds: List[Meld]
     arrived: Optional[Tile]
+    discarder: Optional[Wind]
+    flags: WuFlag
 
     @property
     def all_tiles(self) -> List[Tile]:
@@ -215,23 +217,20 @@ class Wu(Meld):
         return tiles
 
     def __init__(self, tiles: Iterable[Tile], melds: Iterable[Meld] = None,
-                 arrived: Tile = None, flags: WuFlag = WuFlag.CHICKEN_HAND):
+                 arrived: Tile = None, discarder: Optional[int] = None,
+                 flags: WuFlag = WuFlag.CHICKEN_HAND):
         """Check validity upon initialization."""
         self.tiles = tuple(sorted(tiles))
         self.fixed_melds = list(melds or [])
         self.arrived = arrived
+        self.discarder = Wind(discarder) if discarder is not None else None
         self.flags = flags
         self.check_meld()
 
     @classmethod
-    def from_str(
-        cls: Type[Wu], s: str, melds: Iterable[Meld] = None,
-        arrived: Tile = None, flags: WuFlag = WuFlag.CHICKEN_HAND
-    ) -> Wu:
+    def from_str(cls: Type[Wu], s: str, *a, **kw) -> Wu:
         """Wu.from_str('suit1/num1|...') -> Wu"""
-        return cls(
-            tiles=map(Tile.from_str, s.split('|')),
-            melds=melds, arrived=arrived, flags=flags)
+        return cls(map(Tile.from_str, s.split('|')), *a, *kw)
 
     def check_meld(self) -> None:
         """Check that this hand is a winning hand.
