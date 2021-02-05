@@ -19,38 +19,38 @@ class WuFlag(Flag):
     CHICKEN_HAND = 0
 
     # types
-    COMMON_HAND = auto()
-    ALL_IN_TRIPLETS = auto()
-    MIXED_ONE_SUIT = auto()
-    ALL_ONE_SUIT = auto()
-    ALL_HONOR_TILES = auto()
-    SMALL_DRAGONS = auto()
-    GREAT_DRAGONS = auto()
-    SMALL_WINDS = auto()
-    GREAT_WINDS = auto()
-    THIRTEEN_ORPHANS = auto()
-    ALL_KONGS = auto()
-    SELF_TRIPLETS = auto()
-    ORPHANS = auto()
-    NINE_GATES = auto()
+    COMMON_HAND = 1 << 0
+    ALL_IN_TRIPLETS = 1 << 1
+    MIXED_ONE_SUIT = 1 << 2
+    ALL_ONE_SUIT = 1 << 3
+    ALL_HONOR_TILES = 1 << 4
+    SMALL_DRAGONS = 1 << 5
+    GREAT_DRAGONS = 1 << 6
+    SMALL_WINDS = 1 << 7
+    GREAT_WINDS = 1 << 8
+    NINE_GATES = 1 << 9
+    ALL_KONGS = 1 << 10
+    SELF_TRIPLETS = 1 << 11
+    ORPHANS = 1 << 12
+    THIRTEEN_ORPHANS = 1 << 13
 
     # presence of certain tiles
-    SEAT_WIND = auto()
-    PREVAILING_WIND = auto()
-    RED_DRAGON = auto()
-    GREEN_DRAGON = auto()
-    WHITE_DRAGON = auto()
-    MIXED_ORPHANS = auto()
+    SEAT_WIND = 1 << 14
+    PREVAILING_WIND = 1 << 15
+    RED_DRAGON = 1 << 16
+    GREEN_DRAGON = 1 << 17
+    WHITE_DRAGON = 1 << 18
+    MIXED_ORPHANS = 1 << 19
 
     # winning condition
-    SELF_DRAW = auto()
-    ALL_FROM_WALL = auto()
-    ROBBING_KONG = auto()
-    LAST_CATCH = auto()
-    BY_KONG = auto()
-    DOUBLE_KONG = auto()
-    HEAVENLY = auto()
-    EARTHLY = auto()
+    SELF_DRAW = 1 << 20
+    ALL_FROM_WALL = 1 << 21
+    ROBBING_KONG = 1 << 22
+    LAST_CATCH = 1 << 23
+    BY_KONG = 1 << 24
+    DOUBLE_KONG = 1 << 25
+    HEAVENLY = 1 << 26
+    EARTHLY = 1 << 27
 
 def _tname(obj) -> str:
     return type(obj).__name__
