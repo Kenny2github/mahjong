@@ -193,7 +193,7 @@ class Hand:
         if ending.winner is None and not self.wall:
             # tie
             return HandEnding(HandResult.GOULASH, self.round.game.gen)
-        if len(self.wall) <= 1:
+        if len(self.wall) <= 0:
             ending.wu.flags |= WuFlag.LAST_CATCH
         if len(ending.wu.melds) > 1:
             question = UserIO(Question.WHICH_WU, self.round.game.gen,
