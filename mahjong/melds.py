@@ -272,7 +272,8 @@ class Wu(Meld):
                 melds = [meld for meld, idxs in combo] + list(self.fixed_melds)
                 melds.append(test_eyes)
                 yield melds
-        if set(self.tiles) > THIRTEEN_ORPHANS:
+        remainder = set(self.tiles) - THIRTEEN_ORPHANS
+        if len(remainder) == 1 and tuple(remainder)[0] in THIRTEEN_ORPHANS:
             melds: List[Meld] = []
             melds.append(_UncheckedWu(self.tiles))
             yield melds
