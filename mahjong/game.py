@@ -131,7 +131,7 @@ class Game:
             yield UserIO(Question.READY_Q, self.gen)
 
 
-    def init_players(self) -> None:
+    def init_players(self: Union[Game, Hand]) -> None:
         """Setup players."""
         self.players = [Player(i) for i in range(4)]
 
@@ -167,7 +167,7 @@ class Hand:
 
     wind: Wind
     turn: Turn
-    round: Round
+    round: Optional[Round]
     wall: List[Tile]
     discarded: List[Tile]
     ending: Optional[TurnEnding] = None
@@ -180,14 +180,71 @@ class Hand:
     # key got kong from value, and then self drew from the kong
     _gave_kong: Dict[Player, Player]
 
+    @overload
     def __init__(self, round: Round):
-        self.round = round
+        """Setup a hand.
+
+        Pass the :class:`Round`_ explicitly if you have control over Round
+        machinery *and* Game machinery (it will reach into the round's game
+        attribute to get the game's players).
+
+        Otherwise, this is the default invocation by the Round machinery.
+        """
+
+    @overload
+    def __init__(self, players: List[Player]):
+        """Setup a hand.
+
+        Pass ``[p1, p2, p3, p4]`` if you want more control over how hands
+        are played and have control over the players list.
+        """
+
+    @overload
+    def __init__(self, standalone: None):
+        """Setup a hand.
+
+        Pass ``None`` if this hand is intended to be played standalone.
+        The players will be initialized automagically.
+        """
+
+    def __init__(self, round_or_players: Union[Round, List[Player], None]):
+        """Setup a hand."""
+        if isinstance(round_or_players, Round):
+            self.round = round_or_players
+            self.players = self.round.game.players
+        elif isinstance(round_or_players, list):
+            self.round = None
+            self.players = round_or_players
+        else:
+            self.round = None
+            Game.init_players(self)
         self._12_piece = {}
         self._gave_dragon = {}
         self._gave_kong = {}
 
+    def play(self, wind: Wind = Wind.EAST) -> Union[UserIO, HandEnding]:
+        """Play the hand standalone.
+
+        ``wind``: The prevailing wind for this hand.
+
+        Starts and stores a generator.
+        Returns the first request for user input.
+        """
+        if hasattr(self, 'gen'):
+            raise RuntimeError('Game already started!')
+        self.gen = self.execute(wind)
+        try:
+            question = next(self.gen)
+        except StopIteration as exc:
+            return exc.value
+        if isinstance(question, UserIO):
+            return question
+        raise RuntimeError('This should never happen. Contact the developer.')
+
     def execute(self, wind: int):
         """Play a hand till it ends."""
+        if not hasattr(self, 'gen') and self.round is not None:
+            self.gen = self.round.game.gen
         self.wind = Wind(wind)
         self.shuffle() # Step 08
         self.deal() # Step 09
@@ -203,7 +260,7 @@ class Hand:
         # Step 15
         if ending.winner is None: # implies and not self.wall
             # tie
-            return HandEnding(HandResult.GOULASH, self.round.game.gen)
+            return HandEnding(HandResult.GOULASH, self.gen)
         if len(self.wall) <= 0:
             ending.wu.flags |= WuFlag.LAST_CATCH
         if ending.winner in self._gave_dragon:
@@ -214,17 +271,17 @@ class Hand:
             ending.wu.flags |= WuFlag.TWELVE_PIECE
             ending.wu.discarder = self._12_piece[ending.winner].seat
         if len(ending.wu.melds) > 1:
-            question = UserIO(Question.WHICH_WU, self.round.game.gen,
+            question = UserIO(Question.WHICH_WU, self.gen,
                               melds=ending.wu.melds)
             answer = (yield question)
         else:
             answer = ending.wu.melds[0]
-        if ending.winner is self.round.game.players[self.wind]:
+        if ending.winner is self.players[self.wind]:
             return HandEnding(
-                HandResult.DEALER_WON, self.round.game.gen,
+                HandResult.DEALER_WON, self.gen,
                 ending.winner, ending.wu, answer)
         return HandEnding(
-            HandResult.NORMAL, self.round.game.gen, ending.winner, ending.wu, answer)
+            HandResult.NORMAL, self.gen, ending.winner, ending.wu, answer)
 
     def shuffle(self):
         """Generate and shuffle a new wall."""
@@ -247,7 +304,7 @@ class Hand:
         self.discarded = []
 
     def deal(self):
-        players = self.round.game.players
+        players = self.players
         for player in players:
             player.__init__(player.seat)
         # Step 09
@@ -264,8 +321,8 @@ class Turn:
 
     def __init__(self, hand: Hand):
         self.hand = hand
-        self.players = self.hand.round.game.players
-        self.gen = self.hand.round.game.gen
+        self.players = self.hand.players
+        self.gen = self.hand.gen
 
     def execute(self, last_ending: TurnEnding, turncount: int):
         if last_ending.seat is None:
