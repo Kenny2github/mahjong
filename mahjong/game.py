@@ -40,11 +40,11 @@ class Answerable:
 class TurnEnding(NamedTuple):
     winner: Optional[Player] = None
     discard: Optional[Tile] = None
-    seat: Optional[int] = None
+    seat: Optional[Wind] = None
     wu: Optional[Wu] = None
     jumped_with: Optional[Meld] = None
     offered: bool = False
-    prev_seat: Optional[int] = None
+    prev_seat: Optional[Wind] = None
 
 class HandEnding(NamedTuple):
     result: HandResult
@@ -165,6 +165,7 @@ class Round:
 class Hand:
     """Represents one full hand of Mahjong."""
 
+    wind: Wind
     turn: Turn
     round: Round
     wall: List[Tile]
@@ -315,8 +316,9 @@ class Turn:
         thief, meld = (yield from self.check_others_melds(answer, player))
         if thief is None and isinstance(meld, bool):
             # Step 14
-            return TurnEnding(discard=answer, offered=meld,
-                          seat=(player.seat + 1) % 4, prev_seat=player.seat)
+            return TurnEnding(
+                discard=answer, offered=meld,
+                seat=Wind((player.seat + 1) % 4), prev_seat=player.seat)
         # Step 31
         if isinstance(meld, Wu):
             return TurnEnding(winner=thief, wu=meld)

@@ -1,11 +1,11 @@
 from typing import List
-from .tiles import Bonuses, Tile, BonusTile
+from .tiles import Bonuses, Tile, BonusTile, Wind
 from .melds import Meld
 
 class Player:
     """Represents one Mahjong player."""
 
-    seat: int
+    seat: Wind
     hand: List[Tile]
     shown: List[Meld]
     bonus: List[BonusTile]
@@ -17,7 +17,7 @@ class Player:
                                    for tile in meld.tiles])
 
     def __init__(self, seat: int):
-        self.seat = seat
+        self.seat = Wind(seat)
         self.hand = []
         self.shown = []
         self.bonus = []
