@@ -1,7 +1,7 @@
 """All game-process-related classes."""
 from __future__ import annotations
 from enum import Enum
-from typing import Generator, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
+from typing import Generator, List, Mapping, NamedTuple, Optional, Tuple, Union, Dict
 from itertools import combinations
 import random
 from .tiles import BonusTile, Bonuses, Honors, Simples, Tile, Wind
@@ -173,8 +173,18 @@ class Hand:
     ending: Optional[TurnEnding] = None
     turncount: Optional[int] = None
 
+    # key got last meld from value, and then self drew
+    _12_piece: Dict[Player, Player]
+    # key got last dragon meld from value, and then self drew
+    _gave_dragon: Dict[Player, Player]
+    # key got kong from value, and then self drew from the kong
+    _gave_kong: Dict[Player, Player]
+
     def __init__(self, round: Round):
         self.round = round
+        self._12_piece = {}
+        self._gave_dragon = {}
+        self._gave_kong = {}
 
     def execute(self, wind: int):
         """Play a hand till it ends."""
@@ -191,11 +201,18 @@ class Hand:
             self.turncount += 1
         self.ending = ending
         # Step 15
-        if ending.winner is None and not self.wall:
+        if ending.winner is None: # implies and not self.wall
             # tie
             return HandEnding(HandResult.GOULASH, self.round.game.gen)
         if len(self.wall) <= 0:
             ending.wu.flags |= WuFlag.LAST_CATCH
+        if ending.winner in self._gave_dragon:
+            ending.wu.flags |= WuFlag.GAVE_DRAGON
+            ending.wu.discarder = self._gave_dragon[ending.winner].seat
+        if WuFlag.SELF_DRAW in ending.wu.flags \
+                and ending.winner in self._12_piece:
+            ending.wu.flags |= WuFlag.TWELVE_PIECE
+            ending.wu.discarder = self._12_piece[ending.winner].seat
         if len(ending.wu.melds) > 1:
             question = UserIO(Question.WHICH_WU, self.round.game.gen,
                               melds=ending.wu.melds)
@@ -253,12 +270,21 @@ class Turn:
     def execute(self, last_ending: TurnEnding, turncount: int):
         if last_ending.seat is None:
             raise ValueError('Must have valid seat')
-        player = self.players[last_ending.seat]
+        player = self.players[last_ending.seat.value]
         meld: Optional[Meld] = None
         if last_ending.jumped_with is not None and last_ending.discard is not None:
             meld = last_ending.jumped_with
             self.hand.discarded.pop() # Step 18
+            old_count = len(player.shown)
+            old_drag = self.all_dragons(player)
             player.show_meld(last_ending.discard, meld)
+            if old_count == 3 and len(player.shown) == 4:
+                self.hand._12_piece[player] = self.players[
+                    last_ending.prev_seat.value]
+            if not old_drag and self.all_dragons(player):
+                self.hand._gave_dragon[player] = self.players[
+                    last_ending.prev_seat.value]
+            del old_count, old_drag
         elif last_ending.discard is not None and not last_ending.offered:
             # Step 16
             meld: Optional[Meld] = (yield from self.melds_from_discard(
@@ -289,13 +315,20 @@ class Turn:
                         flags |= WuFlag.BY_KONG
                     elif tries > 1:
                         flags |= WuFlag.DOUBLE_KONG
+                    if WuFlag.BY_KONG in flags or WuFlag.DOUBLE_KONG in flags \
+                            and player in self.hand._gave_kong:
+                        flags |= WuFlag.GAVE_KONG
+                        discarder = self.hand._gave_kong[player].seat
+                    else:
+                        discarder = None
                     return TurnEnding(winner=player, wu=Wu(
-                        player.hand, player.shown, drawn, None, flags))
+                        player.hand, player.shown, drawn, discarder, flags))
                 except ValueError:
                     pass
                 arrived = drawn
                 kong = (yield from self.check_ekfp(drawn, player))
                 if kong is None:
+                    self.hand._gave_kong.pop(player, None)
                     break
                 player.shown.append(kong)
                 wu, winner = (yield from self.check_kong_robbers(kong, player))
@@ -324,6 +357,14 @@ class Turn:
             return TurnEnding(winner=thief, wu=meld)
         return TurnEnding(discard=answer, seat=thief.seat,
                           jumped_with=meld, prev_seat=player.seat)
+
+    @staticmethod
+    def all_dragons(player: Player) -> bool:
+        dragons = [False, False, False]
+        for m in player.shown:
+            if m.tiles[0].suit == Honors.LONG:
+                dragons[m.tiles[0].number] = True
+        return all(dragons)
 
     def melds_from_discard(self, player: Player, last_ending: TurnEnding):
         """Check for possible melds to make from the discard tile."""
@@ -457,5 +498,8 @@ class Turn:
                 player=player, arrived=discard)
             answer: Optional[Meld] = (yield question)
             if answer is not None:
+                if isinstance(answer, Kong) \
+                        and discard not in self.hand.discarded[:-1]:
+                    self.hand._gave_kong[player] = victim
                 return (player, answer)
         return (None, bool(overall[self.players[(victim.seat + 1) % 4]]))

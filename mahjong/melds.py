@@ -52,6 +52,11 @@ class WuFlag(Flag):
     HEAVENLY = 1 << 26
     EARTHLY = 1 << 27
 
+    # penalties
+    TWELVE_PIECE = 1 << 28
+    GAVE_DRAGON = 1 << 29
+    GAVE_KONG = 1 << 30
+
 def _tname(obj) -> str:
     return type(obj).__name__
 

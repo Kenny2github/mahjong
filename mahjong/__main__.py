@@ -31,6 +31,7 @@ from mahjong.game import Game, UserIO, Question, HandEnding, HandResult
 game = Game(extra_hands=False)
 print('Note: all indexes are **1-based**.')
 print('This is a rudimentary text-based mahjong implementation.')
+print("It's purely as a proof-of-concept/manual testing method.")
 print("It requires trust that each player won't look at the other's privacy.")
 print("Please don't actually use this. Make something even a tiny bit better.")
 print("With that said, let's start.")
@@ -43,7 +44,7 @@ while question is not None:
             question = question.answer()
             continue
         hand_minus_tile = [tile for tile in question.hand if tile is not question.arrived]
-        print('Question for Player #%s' % question.player.seat)
+        print('Question for Player #%s' % question.player.seat.value)
         print('Draw/Last discard: %s;' % question.arrived, 'Concealed:',
               ', '.join(map(str, hand_minus_tile)))
         print('Shown:', '\t'.join(map(str, question.shown)),
@@ -109,7 +110,7 @@ while question is not None:
         else:
             assert question.choice is not None
             print('Player #%s won with %s (%s faan; %s)! Starting next game...' % (
-                question.winner.seat, ','.join(map(str, question.choice)),
+                question.winner.seat.value, ','.join(map(str, question.choice)),
                 *question.wu.faan(question.choice, (question.winner.seat, game.round.wind))
             ))
         question = question.answer()
