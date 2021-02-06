@@ -1,7 +1,8 @@
 """All game-process-related classes."""
 from __future__ import annotations
 from enum import Enum
-from typing import Generator, List, Mapping, NamedTuple, Optional, Tuple, Union, Dict
+from typing import Generator, List, Mapping, NamedTuple, Optional, \
+    Tuple, Union, Dict, overload
 from itertools import combinations
 import random
 from .tiles import BonusTile, Bonuses, Honors, Simples, Tile, Wind
@@ -27,15 +28,12 @@ __all__ = [
 
 # data classes
 
-class Answerable:
-    """ABC for yielded objects that passthru generator sending."""
-    gen: Generator
-    def answer(self: YieldType, ans=None) -> YieldType:
-        """Send the answer to the internal generator."""
-        try:
-            return self.gen.send(ans)
-        except StopIteration:
-            return None
+def _answer(gen: Generator, ans=None) -> YieldType:
+    """Send the answer to the internal generator."""
+    try:
+        return gen.send(ans)
+    except StopIteration:
+        return None
 
 class TurnEnding(NamedTuple):
     winner: Optional[Player] = None
@@ -48,13 +46,13 @@ class TurnEnding(NamedTuple):
 
 class HandEnding(NamedTuple):
     result: HandResult
-    gen: Generator
+    hand: Hand
     winner: Optional[Player] = None
     wu: Optional[Wu] = None
     choice: Optional[List[Meld]] = None
 
     def answer(self, ans=None):
-        return Answerable.answer(self, ans)
+        return _answer(self.hand.gen, ans)
 
 class Question(Enum):
     MELD_FROM_DISCARD_Q = 16
@@ -65,7 +63,7 @@ class Question(Enum):
     WHICH_WU = 40
     READY_Q = 0
 
-class UserIO(NamedTuple, Answerable):
+class UserIO(NamedTuple):
     question: Question
     gen: Generator
     melds: Union[List[Meld], List[List[Meld]], None] = None
@@ -84,7 +82,7 @@ class UserIO(NamedTuple, Answerable):
         return self.player.shown
 
     def answer(self, ans=None):
-        return Answerable.answer(self, ans)
+        return _answer(self.gen, ans)
 
     def __repr__(self) -> str:
         return f'UserIO(question={self.question}, melds={self.melds}, '\
@@ -96,7 +94,7 @@ class HandResult(Enum):
     GOULASH = 1
     DEALER_WON = 2
 
-YieldType = Union[UserIO, HandEnding, Answerable, None]
+YieldType = Union[UserIO, HandEnding, None]
 
 # game process classes
 
@@ -260,7 +258,7 @@ class Hand:
         # Step 15
         if ending.winner is None: # implies and not self.wall
             # tie
-            return HandEnding(HandResult.GOULASH, self.gen)
+            return HandEnding(HandResult.GOULASH, self)
         if len(self.wall) <= 0:
             ending.wu.flags |= WuFlag.LAST_CATCH
         if ending.winner in self._gave_dragon:
@@ -278,10 +276,10 @@ class Hand:
             answer = ending.wu.melds[0]
         if ending.winner is self.players[self.wind]:
             return HandEnding(
-                HandResult.DEALER_WON, self.gen,
+                HandResult.DEALER_WON, self,
                 ending.winner, ending.wu, answer)
         return HandEnding(
-            HandResult.NORMAL, self.gen, ending.winner, ending.wu, answer)
+            HandResult.NORMAL, self, ending.winner, ending.wu, answer)
 
     def shuffle(self):
         """Generate and shuffle a new wall."""
