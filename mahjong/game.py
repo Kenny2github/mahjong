@@ -62,6 +62,7 @@ class Question(Enum):
     ROB_KONG_Q = 33
     WHICH_WU = 40
     READY_Q = 0
+    SELF_DRAW_Q = 13
 
 class UserIO(NamedTuple):
     question: Question
@@ -376,10 +377,16 @@ class Turn:
                         discarder = self.hand._gave_kong[player].seat
                     else:
                         discarder = None
-                    return TurnEnding(winner=player, wu=Wu(
-                        player.hand, player.shown, drawn, discarder, flags))
+                    wu = Wu(player.hand, player.shown, drawn, discarder, flags)
                 except ValueError:
                     pass
+                else:
+                    question = UserIO(Question.SELF_DRAW_Q, self.gen,
+                                      [wu], player, drawn)
+                    ans: bool = (yield question)
+                    if ans:
+                        return TurnEnding(winner=player, wu=wu)
+                    del ans
                 arrived = drawn
                 kong = (yield from self.check_ekfp(drawn, player))
                 if kong is None:
@@ -436,6 +443,13 @@ class Turn:
                 meld = Kong([*triplet, last_ending.discard])
                 if meld not in melds:
                     melds.append(meld)
+        try:
+            wu = Wu([*player.hand, last_ending.discard], player.shown,
+                    last_ending.discard, last_ending.prev_seat)
+        except ValueError:
+            pass
+        else:
+            melds.append(wu)
         if melds:
             # Step 17
             question = UserIO(Question.MELD_FROM_DISCARD_Q, self.gen,
@@ -445,11 +459,7 @@ class Turn:
                 self.hand.discarded.pop() # Step 18
                 player.show_meld(last_ending.discard, answer)
             return answer
-        try:
-            return Wu(player.hand, player.shown,
-                      last_ending.discard, last_ending.prev_seat)
-        except ValueError:
-            return None
+        return None
 
     def check_ekfp(self, draw: Tile, player: Player):
         """Check whether an Exposed Kong From (any) Pong is possible."""
