@@ -277,8 +277,7 @@ class Wu(Meld):
                 melds = [meld for meld, idxs in combo] + list(self.fixed_melds)
                 melds.append(test_eyes)
                 yield melds
-        remainder = set(self.tiles) - THIRTEEN_ORPHANS
-        if len(remainder) == 1 and tuple(remainder)[0] in THIRTEEN_ORPHANS:
+        if set(self.tiles) == THIRTEEN_ORPHANS:
             melds: List[Meld] = []
             melds.append(_UncheckedWu(self.tiles))
             yield melds
@@ -511,6 +510,7 @@ class _UncheckedWu(Wu):
         """Don't check validity, that's the whole point"""
         self.tiles = tuple(sorted(tiles)) + tuple(
             tile for meld in (melds or []) for tile in meld.tiles)
+        self.fixed_melds = []
 
 # special case: 1 & 9 of each suit + every value of honors suits
 THIRTEEN_ORPHANS = set(_UncheckedWu.from_str(

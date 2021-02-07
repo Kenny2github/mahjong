@@ -108,7 +108,7 @@ class Game:
         self.init_players()
         self.extra_hands = house_rules.pop('extra_hands', True)
 
-    def play(self) -> UserIO:
+    def play(self) -> Union[UserIO, HandEnding]:
         """Play the game!
 
         Starts and stores a generator.
@@ -118,9 +118,7 @@ class Game:
             raise RuntimeError('Game already started!')
         self.gen = self.execute()
         question = next(self.gen)
-        if isinstance(question, UserIO):
-            return question
-        raise RuntimeError('This should never happen. Contact the developer.')
+        return question
 
     def execute(self):
         """Generator-coroutine-based interface to play the game."""
@@ -326,9 +324,11 @@ class Turn:
     def execute(self, last_ending: TurnEnding, turncount: int):
         if last_ending.seat is None:
             raise ValueError('Must have valid seat')
-        player = self.players[last_ending.seat.value]
+        player = self.players[last_ending.seat]
         meld: Optional[Meld] = None
-        if last_ending.jumped_with is not None and last_ending.discard is not None:
+        if last_ending.jumped_with is not None \
+                and last_ending.discard is not None \
+                and last_ending.prev_seat is not None:
             meld = last_ending.jumped_with
             self.hand.discarded.pop() # Step 18
             old_count = len(player.shown)
@@ -336,10 +336,10 @@ class Turn:
             player.show_meld(last_ending.discard, meld)
             if old_count == 3 and len(player.shown) == 4:
                 self.hand._12_piece[player] = self.players[
-                    last_ending.prev_seat.value]
+                    last_ending.prev_seat]
             if not old_drag and self.all_dragons(player):
                 self.hand._gave_dragon[player] = self.players[
-                    last_ending.prev_seat.value]
+                    last_ending.prev_seat]
             del old_count, old_drag
         elif last_ending.discard is not None and not last_ending.offered:
             # Step 16
@@ -371,7 +371,7 @@ class Turn:
                         flags |= WuFlag.BY_KONG
                     elif tries > 1:
                         flags |= WuFlag.DOUBLE_KONG
-                    if WuFlag.BY_KONG in flags or WuFlag.DOUBLE_KONG in flags \
+                    if (WuFlag.BY_KONG in flags or WuFlag.DOUBLE_KONG in flags) \
                             and player in self.hand._gave_kong:
                         flags |= WuFlag.GAVE_KONG
                         discarder = self.hand._gave_kong[player].seat
@@ -545,7 +545,7 @@ class Turn:
                 if meld not in melds:
                     melds.append(meld)
             try:
-                wu = Wu([*player.hand, discard], player.shown, discard, player.seat)
+                wu = Wu([*player.hand, discard], player.shown, discard, victim.seat)
             except ValueError:
                 pass
             else:
