@@ -57,6 +57,42 @@ class WuFlag(Flag):
     GAVE_DRAGON = 1 << 29
     GAVE_KONG = 1 << 30
 
+    # bonuses
+    NO_BONUSES = 1 << 31
+    ALIGNED_FLOWERS = 1 << 32
+    ALIGNED_SEASONS = 1 << 33
+    TABLE_OF_FLOWERS = 1 << 34
+    TABLE_OF_SEASONS = 1 << 35
+    HAND_OF_BONUSES = 1 << 36
+
+# special case: 1 & 9 of each suit + every value of honors suits
+THIRTEEN_ORPHANS = set(map(Tile.from_str, (
+    'tong/1|tong/9|zhu/1|zhu/9|wan/1|wan/9|'  # simples
+    'feng/1|feng/2|feng/3|feng/4|long/1|long/2|long/3'  # honors
+).split('|')))
+
+FLAG_FAAN = {
+    WuFlag.CHICKEN_HAND: 0,
+    WuFlag.COMMON_HAND: 1, WuFlag.ALL_IN_TRIPLETS: 3,
+    WuFlag.ALL_HONOR_TILES: 10, WuFlag.ALL_ONE_SUIT: 7,
+    WuFlag.MIXED_ONE_SUIT: 3, WuFlag.GREAT_DRAGONS: 8,
+    WuFlag.SMALL_DRAGONS: 5, WuFlag.GREAT_WINDS: 13,
+    WuFlag.SMALL_WINDS: 10, WuFlag.THIRTEEN_ORPHANS: 13,
+    WuFlag.ALL_KONGS: 13, WuFlag.SELF_TRIPLETS: 8,
+    WuFlag.ORPHANS: 10, WuFlag.NINE_GATES: 10,
+    WuFlag.RED_DRAGON: 1, WuFlag.GREAT_WINDS: 1,
+    WuFlag.WHITE_DRAGON: 1, WuFlag.SEAT_WIND: 1,
+    WuFlag.PREVAILING_WIND: 1, WuFlag.MIXED_ORPHANS: 1,
+    WuFlag.SELF_DRAW: 1, WuFlag.ALL_FROM_WALL: 1,
+    WuFlag.ROBBING_KONG: 1, WuFlag.LAST_CATCH: 1,
+    WuFlag.BY_KONG: 1, WuFlag.DOUBLE_KONG: 8,
+    WuFlag.HEAVENLY: 13, WuFlag.EARTHLY: 13,
+    WuFlag.TWELVE_PIECE: 0, WuFlag.GAVE_DRAGON: 0, WuFlag.GAVE_KONG: 0,
+    WuFlag.NO_BONUSES: 1, WuFlag.ALIGNED_FLOWERS: 1,
+    WuFlag.ALIGNED_SEASONS: 1, WuFlag.TABLE_OF_FLOWERS: 2,
+    WuFlag.TABLE_OF_SEASONS: 2, WuFlag.HAND_OF_BONUSES: 8,
+}
+
 def _tname(obj) -> str:
     return type(obj).__name__
 
@@ -511,33 +547,6 @@ class _UncheckedWu(Wu):
         self.tiles = tuple(sorted(tiles)) + tuple(
             tile for meld in (melds or []) for tile in meld.tiles)
         self.fixed_melds = []
-
-# special case: 1 & 9 of each suit + every value of honors suits
-THIRTEEN_ORPHANS = set(_UncheckedWu.from_str(
-    'tong/1|tong/9|zhu/1|zhu/9|wan/1|wan/9|'  # simples
-    'feng/1|feng/2|feng/3|feng/4|long/1|long/2|long/3'  # honors
-).tiles)
-
-FLAG_FAAN = {
-    WuFlag.CHICKEN_HAND: 0,
-    WuFlag.COMMON_HAND: 1, WuFlag.ALL_IN_TRIPLETS: 3,
-    WuFlag.ALL_HONOR_TILES: 10, WuFlag.ALL_ONE_SUIT: 7,
-    WuFlag.MIXED_ONE_SUIT: 3, WuFlag.GREAT_DRAGONS: 8,
-    WuFlag.SMALL_DRAGONS: 5, WuFlag.GREAT_WINDS: 13,
-    WuFlag.SMALL_WINDS: 10, WuFlag.THIRTEEN_ORPHANS: 13,
-    WuFlag.ALL_KONGS: 13, WuFlag.SELF_TRIPLETS: 8,
-    WuFlag.ORPHANS: 10, WuFlag.NINE_GATES: 10,
-    WuFlag.RED_DRAGON: 1, WuFlag.GREAT_WINDS: 1,
-    WuFlag.WHITE_DRAGON: 1, WuFlag.SEAT_WIND: 1,
-    WuFlag.PREVAILING_WIND: 1, WuFlag.MIXED_ORPHANS: 1,
-    WuFlag.SELF_DRAW: 1, WuFlag.ALL_FROM_WALL: 1,
-    WuFlag.ROBBING_KONG: 1, WuFlag.LAST_CATCH: 1,
-    WuFlag.BY_KONG: 1, WuFlag.DOUBLE_KONG: 8,
-    WuFlag.HEAVENLY: 13, WuFlag.EARTHLY: 13,
-    WuFlag.NO_BONUSES: 1, WuFlag.ALIGNED_FLOWERS: 1,
-    WuFlag.ALIGNED_SEASONS: 1, WuFlag.TABLE_OF_FLOWERS: 2,
-    WuFlag.TABLE_OF_SEASONS: 2, WuFlag.HAND_OF_BONUSES: 8,
-}
 
 if 0:
     # TODO: figure out why one particular one takes multiple seconds:

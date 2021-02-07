@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Tuple
 from .tiles import Bonuses, Tile, BonusTile, Wind
-from .melds import Meld
+from .melds import Meld, WuFlag, faan
 
 class Player:
     """Represents one Mahjong player."""
@@ -45,22 +45,32 @@ class Player:
             self.hand.remove(tile)
         self.shown.append(meld) # Step 19
 
-    def bonus_faan(self) -> int:
+    def bonus_faan(self) -> Tuple[int, WuFlag]:
         """Get faan won from bonus tiles or lack thereof."""
-        points = 0
+        flags = WuFlag.CHICKEN_HAND
         if not self.bonus:
-            points += 1 # :(
+            flags |= WuFlag.NO_BONUSES
         found = {
             Bonuses.GUI: [False]*4,
             Bonuses.HUA: [False]*4
         }
         for tile in self.bonus:
             if tile.number == self.seat:
-                points += 1
+                if tile.suit == Bonuses.HUA:
+                    flags |= WuFlag.ALIGNED_FLOWERS
+                elif tile.suit == Bonuses.GUI:
+                    flags |= WuFlag.ALIGNED_SEASONS
             found[tile.suit][tile.number] = True
-        for v in found.values():
+        for k, v in found.items():
             if all(v):
-                points += 1
+                if k == Bonuses.HUA:
+                    flags |= WuFlag.TABLE_OF_FLOWERS
+                elif k == Bonuses.GUI:
+                    flags |= WuFlag.TABLE_OF_SEASONS
         if all(map(all, found.values())):
-            points += 8
-        return points
+            flags = WuFlag.HAND_OF_BONUSES
+        if WuFlag.TABLE_OF_FLOWERS in flags:
+            flags &= ~(WuFlag.ALIGNED_FLOWERS)
+        if WuFlag.TABLE_OF_SEASONS in flags:
+            flags &= ~(WuFlag.ALIGNED_SEASONS)
+        return (faan(flags), flags)

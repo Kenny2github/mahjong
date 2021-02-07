@@ -26,6 +26,34 @@ __all__ = [
     'Turn',
 ]
 
+STOCK_TABLES = {
+    'enwp': {
+        1: 1, 2: 1, 3: 1,
+        4: 2, 5: 2, 6: 2,
+        7: 4, 8: 4, 9: 4,
+        10: 8
+    },
+    'zhwp': {
+        0: 1, 1: 2, 2: 4, 3: 8,
+        4: 16, 5: 24, 6: 32, 7: 48,
+        8: 64, 9: 96, 10: 128, 11: 192,
+        12: 256, 13: 384
+    },
+    # in the app I play,
+    # 3 faan = 1200c = 1x1200
+    # 4 faan = 2400c = 2x1200
+    # 5 faan = 3600c = 3x1200
+    # 6 faan = 4800c = 4x1200
+    # 7 faan = 7200c = 6x1200
+    # 8 faan = 9600c = 8x1200
+    'random_app': {
+        1: 1, 2: 1, 3: 1,
+        4: 2, 5: 3, 6: 4,
+        7: 6, 8: 8, 9: 10,
+        10: 13
+    }
+}
+
 # data classes
 
 def _answer(gen: Generator, ans=None) -> YieldType:
@@ -53,6 +81,71 @@ class HandEnding(NamedTuple):
 
     def answer(self, ans=None):
         return _answer(self.hand.gen, ans)
+
+    def faan(self) -> Tuple[int, Optional[WuFlag]]:
+        """Calculate the faan for this hand."""
+        if self.winner is None or self.wu is None or self.choice is None:
+            return (0, None)
+        points = self.wu.faan(self.choice, (self.winner.seat, self.hand.wind))
+        bonus = self.winner.bonus_faan()
+        return (points[0] + bonus[0], points[1] | bonus[1])
+
+    def points(self, min_faan: int = 3, table: Mapping[int, int] = None) \
+            -> Tuple[List[int], Optional[WuFlag]]:
+        """Calculate the change in points for each player.
+
+        Parameters
+        -----------
+        ``min_faan``: int
+            Minimum faan before the hand is recognized as a valid winning hand
+        ``table``: Mapping[int, int]
+            Mapping of faan to base points. The largest faan value is assumed
+            to be the limit, and values larger than it will be mapped to it.
+
+        Returns
+        --------
+        Tuple[List[int], Optional[WuFlag]]
+            A list of four point deltas, representing each player, and
+            the flags that apply to this hand. The former is four zeroes,
+            and the latter is None, on goulash or not enough faan.
+        """
+        points = [0, 0, 0, 0]
+        if self.winner is None:
+            return (points, None)
+        faan, flags = self.faan()
+        if faan < min_faan:
+            return (points, None)
+        winner = self.winner
+        wu = self.wu
+        if table is None:
+            table = STOCK_TABLES['random_app']
+        limit = max(table.keys())
+        base = table[min(faan, limit)]
+        # special penalties that make the perpetrator pay
+        # for everyone else on top of themselves
+        if ((WuFlag.TWELVE_PIECE in wu.flags and WuFlag.SELF_DRAW in wu.flags)
+            or (WuFlag.GAVE_KONG in wu.flags and WuFlag.SELF_DRAW in wu.flags)
+            or WuFlag.GAVE_DRAGON in wu.flags) and wu.discarder is not None:
+            points[winner.seat] += base * 3
+            points[wu.discarder] -= base * 3
+        # loser pays double in normal losing conditions
+        elif wu.discarder is not None:
+            points[winner.seat] += base * 2
+            points[wu.discarder] -= base * 2
+        # self draw means everyone pays
+        elif WuFlag.SELF_DRAW in wu.flags:
+            for i in range(4):
+                if i == winner.seat:
+                    points[i] += base * 3
+                else:
+                    points[i] -= base
+        else:
+            raise ValueError('Somehow, nobody gets points. '
+                             'Possibly report to maintainer with '
+                             'the following information: '
+                             + str(self.wu.__dict__)
+                             + ' ;; ' + str(self.winner.__dict__))
+        return (points, flags)
 
 class Question(Enum):
     MELD_FROM_DISCARD_Q = 16

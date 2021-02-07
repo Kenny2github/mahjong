@@ -26,9 +26,13 @@ for p in game.players:
     print(', '.join(map(str, p.bonus)))
 #'''
 #''' # uncomment this opening triple quote when commenting out one elsewhere
-from mahjong.game import Game, UserIO, Question, HandEnding, HandResult
+import sys
+from mahjong.game import Game, Hand, UserIO, Question, HandEnding, HandResult
 
-game = Game(extra_hands=False)
+if '--game' in sys.argv:
+    game = Game(extra_hands=False)
+else:
+    game = Hand(None)
 print('Note: all indexes are **1-based**.')
 print('This is a rudimentary text-based mahjong implementation.')
 print("It's purely as a proof-of-concept/manual testing method.")
@@ -109,9 +113,9 @@ while question is not None:
             print('Goulash! Nobody wins. Starting next game...')
         else:
             assert question.choice is not None
-            print('Player #%s won with %s (%s faan; %s)! Starting next game...' % (
+            print('Player #%s won with %s (%s faan; %s points; %s)! Starting next game...' % (
                 question.winner.seat.value, ','.join(map(str, question.choice)),
-                *question.wu.faan(question.choice, (question.winner.seat, game.round.wind))
+                question.faan()[0], *question.points(1)
             ))
         question = question.answer()
 print('Game Over!')
