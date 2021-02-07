@@ -211,7 +211,7 @@ class Wu(Meld):
     fixed_melds: List[Meld]
     arrived: Optional[Tile]
     discarder: Optional[Wind]
-    flags: WuFlag
+    base_flags: WuFlag
 
     @property
     def all_tiles(self) -> List[Tile]:
@@ -229,7 +229,7 @@ class Wu(Meld):
         self.fixed_melds = list(melds or [])
         self.arrived = arrived
         self.discarder = Wind(discarder) if discarder is not None else None
-        self.flags = flags
+        self.base_flags = flags
         self.check_meld()
 
     @classmethod
@@ -334,33 +334,14 @@ class Wu(Meld):
                 trips[trip_idxs] = meld
         return sorted((i, j) for j, i in trips.items())
 
-    def faan(self, choice: Sequence[Meld],
-             winds: Tuple[int, int] = None) -> Tuple[int, WuFlag]:
-        """Number of faan points the Wu is worth.
-
-        Parameters
-        -----------
-        ``choice``: Sequence[Meld]
-            Which combination of melds from the possible
-            set to calculate the points for.
-        ``winds``: Optional[Tuple[int, int]]
-            If specified as (seat, prevailing), this provides the necessary
-            context to include the Seat Wind and Prevailing Wind Wu flags.
-
-        Returns
-        --------
-        Tuple[int, WuFlag]
-            (points, flags): flags represents all of the features of a Wu
-            that are true for this particular combination.
-        """
+    def flags(self, choice: Sequence[Meld],
+             winds: Tuple[int, int] = None) -> WuFlag:
+        """WuFlags that apply to this choice of winning hand."""
         all_tiles = self.all_tiles
-        points = 0
-        types = self.flags
+        types = self.base_flags
         if all(isinstance(meld, (Chow, Eyes)) for meld in choice):
-            points += 1
             types |= WuFlag.COMMON_HAND
         if all(isinstance(meld, (Pong, Kong, Eyes)) for meld in choice):
-            points += 3
             types |= WuFlag.ALL_IN_TRIPLETS
         suit = None
         hon = False
@@ -375,15 +356,12 @@ class Wu(Meld):
         else:
             if hon and suit is None:
                 # no regulars, only honors
-                points += 10
                 types |= WuFlag.ALL_HONOR_TILES
             elif not hon:
                 # no honors, only regulars
-                points += 7
                 types |= WuFlag.ALL_ONE_SUIT
             else:
                 # regulars (but of one suit) and honors
-                points += 3
                 types |= WuFlag.MIXED_ONE_SUIT
         long: List[Optional[type]] = [None, None, None]
         for meld in choice:
@@ -394,10 +372,8 @@ class Wu(Meld):
             long[meld.tiles[0].number] = type(meld)
         if all(long):
             if not any(typ is Eyes for typ in long):
-                points += 8
                 types |= WuFlag.GREAT_DRAGONS
             else:
-                points += 5
                 types |= WuFlag.SMALL_DRAGONS
         feng: List[Optional[type]] = [None, None, None, None]
         for meld in choice:
@@ -408,16 +384,12 @@ class Wu(Meld):
             feng[meld.tiles[0].number] = type(meld)
         if all(feng):
             if not any(typ is Eyes for typ in feng):
-                points += 13
                 types |= WuFlag.GREAT_WINDS
             else:
-                points += 10
                 types |= WuFlag.SMALL_WINDS
         if len(choice) == 1: # only one possible way this can happen
-            points += 13
             types |= WuFlag.THIRTEEN_ORPHANS
         if all(isinstance(meld, (Kong, Eyes)) for meld in choice):
-            points += 13
             types |= WuFlag.ALL_KONGS
         if not self.fixed_melds and WuFlag.ALL_IN_TRIPLETS in types:
             if WuFlag.SELF_DRAW in types or ( # self draw or
@@ -431,7 +403,6 @@ class Wu(Meld):
                         for meld in choice
                         if isinstance(meld, Eyes))
             ):
-                points += 8
                 types |= WuFlag.SELF_TRIPLETS
         for meld in choice:
             if isinstance(meld, Chow):
@@ -441,10 +412,6 @@ class Wu(Meld):
             if meld.tiles[0].number not in {0, 8}:
                 break
         else:
-            # this hand counts 10 points and suppresses all in triplets.
-            # to handle this we just count it as 7 points since the hand
-            # itself implies all in triplets anyway
-            points += 7
             types |= WuFlag.ORPHANS
         counts = [0, 0, 0, 0, 0, 0, 0, 0, 0]
         goals = [3, 1, 1, 1, 1, 1, 1, 1, 3]
@@ -462,8 +429,6 @@ class Wu(Meld):
                 break
             else:
                 if diff == 1:
-                    # same deal with the points as Orphan
-                    points += 7
                     types |= WuFlag.NINE_GATES
         favorable = list({
             'long/1': WuFlag.RED_DRAGON,
@@ -476,7 +441,6 @@ class Wu(Meld):
         for meld in choice:
             for s, flag in favorable:
                 if meld.tiles[0] == Tile.from_str(s):
-                    points += 1
                     types |= flag
         for tile in all_tiles:
             if isinstance(tile.suit, Honors):
@@ -485,32 +449,58 @@ class Wu(Meld):
                 continue
             break
         else:
-            points += 1
             types |= WuFlag.MIXED_ORPHANS
-        if WuFlag.SELF_DRAW in types:
-            points += 1
         if not self.fixed_melds:
-            points += 1
             types |= WuFlag.ALL_FROM_WALL
-        if WuFlag.ROBBING_KONG in types:
-            points += 1
-        if WuFlag.LAST_CATCH in types:
-            points += 1
-        if WuFlag.BY_KONG in types:
-            points += 1
-        if WuFlag.DOUBLE_KONG in types:
-            points += 8
-        if WuFlag.HEAVENLY in types:
-            points += 13
-        if WuFlag.EARTHLY in types:
-            points += 13
-        return (points, types)
+        # unset flags
+        if WuFlag.SMALL_WINDS in types:
+            types &= ~(WuFlag.SEAT_WIND | WuFlag.PREVAILING_WIND)
+        if WuFlag.SELF_TRIPLETS in types:
+            types &= ~(WuFlag.ALL_FROM_WALL | WuFlag.ALL_IN_TRIPLETS)
+        if WuFlag.ALL_HONOR_TILES in types:
+            types &= ~(WuFlag.ALL_IN_TRIPLETS)
+        if WuFlag.ORPHANS in types:
+            types &= ~(WuFlag.ALL_IN_TRIPLETS)
+        if WuFlag.NINE_GATES in types:
+            types &= ~(WuFlag.ALL_ONE_SUIT | WuFlag.ALL_FROM_WALL)
+        if WuFlag.THIRTEEN_ORPHANS in types:
+            types &= ~(WuFlag.MIXED_ORPHANS | WuFlag.ORPHANS)
+        return types
+
+    def faan(self, choice: Sequence[Meld],
+              winds: Tuple[int, int] = None) -> Tuple[int, WuFlag]:
+        """Number of faan points the Wu is worth.
+
+        Parameters
+        -----------
+        ``choice``: Sequence[Meld]
+            Which combination of melds from the possible
+            set to calculate the points for.
+        ``winds``: Optional[Tuple[int, int]]
+            If specified as (seat, prevailing), this provides the necessary
+            context to include the Seat Wind and Prevailing Wind Wu flags.
+
+        Returns
+        --------
+        Tuple[int, WuFlag]
+            (points, flags): flags represents all of the features of a Wu
+            that are true for this particular combination.
+        """
+        types = self.flags(choice, winds)
+        return (faan(types), types)
 
     def max_faan(self, winds: Tuple[int, int] = None) \
         -> Tuple[List[Meld], int, WuFlag]:
         return max(
             ((choice, *self.faan(choice, winds)) for choice in self.melds),
             key=lambda trip: trip[1])
+
+def faan(flags: WuFlag) -> int:
+    points = 0
+    for flag in WuFlag:
+        if flag in flags:
+            points += FLAG_FAAN[flag]
+    return points
 
 class _UncheckedWu(Wu):
     size = range(13, 19)
@@ -527,6 +517,27 @@ THIRTEEN_ORPHANS = set(_UncheckedWu.from_str(
     'tong/1|tong/9|zhu/1|zhu/9|wan/1|wan/9|'  # simples
     'feng/1|feng/2|feng/3|feng/4|long/1|long/2|long/3'  # honors
 ).tiles)
+
+FLAG_FAAN = {
+    WuFlag.CHICKEN_HAND: 0,
+    WuFlag.COMMON_HAND: 1, WuFlag.ALL_IN_TRIPLETS: 3,
+    WuFlag.ALL_HONOR_TILES: 10, WuFlag.ALL_ONE_SUIT: 7,
+    WuFlag.MIXED_ONE_SUIT: 3, WuFlag.GREAT_DRAGONS: 8,
+    WuFlag.SMALL_DRAGONS: 5, WuFlag.GREAT_WINDS: 13,
+    WuFlag.SMALL_WINDS: 10, WuFlag.THIRTEEN_ORPHANS: 13,
+    WuFlag.ALL_KONGS: 13, WuFlag.SELF_TRIPLETS: 8,
+    WuFlag.ORPHANS: 10, WuFlag.NINE_GATES: 10,
+    WuFlag.RED_DRAGON: 1, WuFlag.GREAT_WINDS: 1,
+    WuFlag.WHITE_DRAGON: 1, WuFlag.SEAT_WIND: 1,
+    WuFlag.PREVAILING_WIND: 1, WuFlag.MIXED_ORPHANS: 1,
+    WuFlag.SELF_DRAW: 1, WuFlag.ALL_FROM_WALL: 1,
+    WuFlag.ROBBING_KONG: 1, WuFlag.LAST_CATCH: 1,
+    WuFlag.BY_KONG: 1, WuFlag.DOUBLE_KONG: 8,
+    WuFlag.HEAVENLY: 13, WuFlag.EARTHLY: 13,
+    WuFlag.NO_BONUSES: 1, WuFlag.ALIGNED_FLOWERS: 1,
+    WuFlag.ALIGNED_SEASONS: 1, WuFlag.TABLE_OF_FLOWERS: 2,
+    WuFlag.TABLE_OF_SEASONS: 2, WuFlag.HAND_OF_BONUSES: 8,
+}
 
 if 0:
     # TODO: figure out why one particular one takes multiple seconds:

@@ -261,13 +261,13 @@ class Hand:
             # tie
             return HandEnding(HandResult.GOULASH, self)
         if len(self.wall) <= 0:
-            ending.wu.flags |= WuFlag.LAST_CATCH
+            ending.wu.base_flags |= WuFlag.LAST_CATCH
         if ending.winner in self._gave_dragon:
-            ending.wu.flags |= WuFlag.GAVE_DRAGON
+            ending.wu.base_flags |= WuFlag.GAVE_DRAGON
             ending.wu.discarder = self._gave_dragon[ending.winner].seat
         if WuFlag.SELF_DRAW in ending.wu.flags \
                 and ending.winner in self._12_piece:
-            ending.wu.flags |= WuFlag.TWELVE_PIECE
+            ending.wu.base_flags |= WuFlag.TWELVE_PIECE
             ending.wu.discarder = self._12_piece[ending.winner].seat
         if len(ending.wu.melds) > 1:
             question = UserIO(Question.WHICH_WU, self.gen,
@@ -347,7 +347,7 @@ class Turn:
                 player, last_ending))
         if isinstance(meld, Wu):
             if turncount == 1:
-                meld.flags |= WuFlag.EARTHLY
+                meld.base_flags |= WuFlag.EARTHLY
             return TurnEnding(winner=player, wu=meld)
         if isinstance(meld, Kong):
             wu, winner = (yield from self.check_kong_robbers(meld, player))
