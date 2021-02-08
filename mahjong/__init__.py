@@ -20,7 +20,7 @@ For full usage see the docs:
 https://github.com/Kenny2github/mahjong/wiki
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0rc1"
 __all__ = [
     'TurnEnding',
     'HandEnding',
