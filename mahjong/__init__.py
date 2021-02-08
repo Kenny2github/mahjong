@@ -20,7 +20,7 @@ For full usage see the docs:
 https://github.com/Kenny2github/mahjong/wiki
 """
 
-__version__ = "2.0.0rc2"
+__version__ = "2.0.0rc3"
 
 __all__ = [
     'STOCK_TABLES',
