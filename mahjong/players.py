@@ -2,6 +2,10 @@ from typing import List, Tuple
 from .tiles import Bonuses, Tile, BonusTile, Wind
 from .melds import Meld, WuFlag, faan
 
+__all__ = [
+    'Player',
+]
+
 class Player:
     """Represents one Mahjong player."""
 

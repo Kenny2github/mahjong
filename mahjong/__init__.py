@@ -20,8 +20,10 @@ For full usage see the docs:
 https://github.com/Kenny2github/mahjong/wiki
 """
 
-__version__ = "2.0.0rc1"
+__version__ = "2.0.0rc2"
+
 __all__ = [
+    'STOCK_TABLES',
     'TurnEnding',
     'HandEnding',
     'Question',
@@ -49,12 +51,17 @@ __all__ = [
     'BonusTile',
 
     'WuFlag',
+    'THIRTEEN_ORPHANS',
+    'FLAG_FAAN',
     'Meld',
     'Pong',
     'Kong',
     'Chow',
     'Eyes',
     'Wu',
+    'faan',
+
+    'Player',
 ]
 
 from .players import *

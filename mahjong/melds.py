@@ -1,18 +1,21 @@
 """Contains classes representing melds that check their validity."""
 from __future__ import annotations
-from enum import Flag, auto
+from enum import Flag
 from itertools import combinations
 from typing import Optional, Sequence, Union, Iterable, List, Iterator, TypeVar, Type, Tuple
 from .tiles import Honors, Tile, Simples, Bonuses, Misc, Wind
 
 __all__ = [
     'WuFlag',
+    'THIRTEEN_ORPHANS',
+    'FLAG_FAAN',
     'Meld',
     'Pong',
     'Kong',
     'Chow',
     'Eyes',
     'Wu',
+    'faan',
 ]
 
 class WuFlag(Flag):

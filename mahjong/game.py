@@ -14,6 +14,7 @@ from .players import Player
 # a lot of circular imports if they are in different files.
 
 __all__ = [
+    'STOCK_TABLES',
     'TurnEnding',
     'HandEnding',
     'Question',
