@@ -61,24 +61,24 @@ class Dragon(IntEnum):
 
 class Flower(IntEnum):
     """Represents a Flowers tile"""
-    MEI = Wind.EAST
-    LAN = Wind.SOUTH
-    JU = Wind.WEST
-    ZHU = Wind.NORTH
+    MEI = Wind.EAST.value
+    LAN = Wind.SOUTH.value
+    JU = Wind.WEST.value
+    ZHU = Wind.NORTH.value
 
 class Season(IntEnum):
     """Represents a Seasons tile"""
-    SPRING = Wind.EAST
-    SUMMER = Wind.SOUTH
-    AUTUMN = Wind.WEST
-    WINTER = Wind.NORTH
+    SPRING = Wind.EAST.value
+    SUMMER = Wind.SOUTH.value
+    AUTUMN = Wind.WEST.value
+    WINTER = Wind.NORTH.value
 
 ORDER = {
     'wan': 0, 'tong': 1, 'zhu': 2,
     'feng': 3, 'long': 4
 }
 
-Number = Union[int, Wind, Dragon, Flower, Season]
+Number = Union[int, Wind, Dragon]
 
 class Tile:
     """Data class for tiles."""
@@ -89,6 +89,16 @@ class Tile:
         """Initialize Tile."""
         self.suit = suit
         self.number = number
+        if self.suit in Simples:
+            self.number = int(number)
+        elif self.suit == Honors.FENG:
+            self.number = Wind(number)
+        elif self.suit == Honors.LONG:
+            self.number = Dragon(number)
+        elif self.suit in Bonuses:
+            raise ValueError('Please use the BonusTile class for bonus tiles.')
+        else:
+            raise ValueError(f'Invalid suit: {self.suit!r}')
 
     @classmethod
     def from_str(cls, s: str) -> Tile:
@@ -144,4 +154,9 @@ class BonusTile(Tile):
     def __init__(self, suit: Bonuses, number: Union[int, Flower, Season]):
         """Initialize Tile."""
         self.suit = suit
-        self.number = number
+        if self.suit == Bonuses.HUA:
+            self.number = Flower(number)
+        elif self.suit == Bonuses.GUI:
+            self.number = Season(number)
+        else:
+            raise ValueError(f'Invalid BonusTile suit: {self.suit!r}')

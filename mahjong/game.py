@@ -61,8 +61,8 @@ def _answer(gen: Generator, ans=None) -> YieldType:
     """Send the answer to the internal generator."""
     try:
         return gen.send(ans)
-    except StopIteration:
-        return None
+    except StopIteration as exc:
+        return exc.value
 
 class TurnEnding(NamedTuple):
     winner: Optional[Player] = None
@@ -197,6 +197,7 @@ class Game:
     """Represents an entire game (consisting of 4 Rounds)."""
 
     round: Round
+    players: List[Player]
 
     def __init__(self, **house_rules):
         self.init_players()
@@ -220,7 +221,6 @@ class Game:
             self.round = Round(self)
             yield from self.round.execute(i) # Step 02
             yield UserIO(Question.READY_Q, self.gen)
-
 
     def init_players(self: Union[Game, Hand]) -> None:
         """Setup players."""
@@ -261,8 +261,9 @@ class Hand:
     round: Optional[Round]
     wall: List[Tile]
     discarded: List[Tile]
+    discarders: List[Player]
     ending: Optional[TurnEnding] = None
-    turncount: Optional[int] = None
+    turncount: int = 0
 
     # key got last meld from value, and then self drew
     _12_piece: Dict[Player, Player]
@@ -323,14 +324,15 @@ class Hand:
         """
         if hasattr(self, 'gen'):
             raise RuntimeError('Game already started!')
+        if self.round is not None:
+            raise RuntimeError('This Hand is part of a Round '
+                               'and cannot be played standalone.')
         self.gen = self.execute(wind)
         try:
             question = next(self.gen)
         except StopIteration as exc:
             return exc.value
-        if isinstance(question, UserIO):
-            return question
-        raise RuntimeError('This should never happen. Contact the developer.')
+        return question
 
     def execute(self, wind: int):
         """Play a hand till it ends."""
@@ -425,6 +427,7 @@ class Turn:
                 and last_ending.prev_seat is not None:
             meld = last_ending.jumped_with
             self.hand.discarded.pop() # Step 18
+            self.hand.discarders.pop()
             old_count = len(player.shown)
             old_drag = self.all_dragons(player)
             player.show_meld(last_ending.discard, meld)
@@ -501,6 +504,7 @@ class Turn:
         # Step 28
         player.hand.remove(answer)
         self.hand.discarded.append(answer)
+        self.hand.discarders.append(player)
         # Step 29
         thief, meld = (yield from self.check_others_melds(answer, player))
         if thief is None and isinstance(meld, bool):
@@ -551,6 +555,7 @@ class Turn:
             answer: Optional[Meld] = (yield question)
             if answer is not None:
                 self.hand.discarded.pop() # Step 18
+                self.hand.discarders.pop()
                 player.show_meld(last_ending.discard, answer)
             return answer
         return None

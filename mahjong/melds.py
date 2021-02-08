@@ -208,10 +208,8 @@ class Kong(_SameNum):
 
     def __str__(self) -> str:
         """Kongs are represented by one faceup, two stacked down, one faceup"""
-        #pylint: disable=no-member
         return '|'.join(map(str, [
             self.tiles[0], Misc.HIDDEN.value, self.tiles[-1]]))
-        #pylint: enable=no-member
 
 class Chow(Meld):
     """Represents a Chow (three tiles of the same suit with consecutive numbers)"""
@@ -541,7 +539,7 @@ def faan(flags: WuFlag) -> int:
     return points
 
 class _UncheckedWu(Wu):
-    size = range(13, 19)
+    size = 14
 
     def __init__(
         self, tiles: Iterable[Tile], melds: Iterable[Meld] = None, *_, **__
