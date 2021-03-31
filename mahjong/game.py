@@ -396,6 +396,7 @@ class Hand:
         random.shuffle(wall)
         self.wall = wall
         self.discarded = []
+        self.discarders = []
 
     def deal(self):
         players = self.players
