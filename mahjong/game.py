@@ -173,6 +173,20 @@ class UserIO(NamedTuple):
         return self.player.hand
 
     @property
+    def playable_hand(self) -> List[Tile]:
+        """Shortcut to .player.hand, with the arrived tile removed
+        if present in the hand.
+        """
+        return [tile for tile in self.hand if tile is not self.arrived]
+
+    @property
+    def arrived_playable(self) -> bool:
+        """Whether the .arrived tile can be played from the hand
+        (i.e. whether it was drawn, not stolen to meld).
+        """
+        return any(tile is self.arrived for tile in self.hand)
+
+    @property
     def shown(self) -> List[Meld]:
         """Shortcut to .player.shown"""
         return self.player.shown
