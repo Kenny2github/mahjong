@@ -97,6 +97,13 @@ while question is not None:
                 question = question.answer(None)
             else:
                 question = question.answer(question.melds[idx-1])
+        elif question.question == Question.SELF_DRAW_Q:
+            assert question.melds is not None
+            print('You can win by self-draw with:', question.melds[0])
+            inp = '?'
+            while inp not in {'y', 'n'}:
+                inp = input('Do you want to? (y/n) ').casefold()
+            question = question.answer(inp == 'y')
         elif question.question == Question.ROB_KONG_Q:
             assert question.melds is not None
             print('You can rob the last Kong to win with:', question.melds[0])
