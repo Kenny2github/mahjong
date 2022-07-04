@@ -27,7 +27,8 @@ for p in game.players:
 #'''
 #''' # uncomment this opening triple quote when commenting out one elsewhere
 import sys
-from mahjong.game import Game, Hand, UserIO, Question, HandEnding, HandResult
+from mahjong.game import Game, Hand
+from mahjong import qna
 
 if '--game' in sys.argv:
     game = Game(extra_hands=False)
@@ -42,12 +43,12 @@ print("With that said, let's start.")
 
 question = game.play()
 while question is not None:
-    if isinstance(question, UserIO):
-        if question.question == Question.READY_Q:
+    if isinstance(question, qna.UserIO):
+        if isinstance(question, qna.ReadyQ):
             input('Hit Enter when ready for the next round.')
             question = question.answer()
             continue
-        assert question.player is not None
+        assert isinstance(question, qna._ArrivedIO)
         hand_minus_tile = [tile for tile in question.player.hand
                            if tile is not question.arrived]
         print('Question for Player #%s' % question.player.seat.value)
@@ -55,7 +56,7 @@ while question is not None:
               ', '.join(map(str, hand_minus_tile)))
         print('Shown:', '\t'.join(map(str, question.shown)),
               '- Bonuses:', '|'.join(map(str, question.player.bonus)))
-        if question.question == Question.DISCARD_WHAT:
+        if isinstance(question, qna.DiscardWhat):
             idx = int(input('Enter index of card to discard. 0 for draw. '))
             if idx == 0:
                 if question.arrived in question.hand:
@@ -70,8 +71,7 @@ while question is not None:
                 tile = hand_minus_tile[0]
             print('Discarding', tile)
             question = question.answer(tile)
-        elif question.question == Question.MELD_FROM_DISCARD_Q:
-            assert question.melds is not None
+        elif isinstance(question, qna.MeldFromDiscardQ):
             print('Available melds to meld:', '\t'.join(map(str, question.melds)))
             try:
                 idx = int(input('Enter index of meld to meld, or blank to not meld: '))
@@ -79,8 +79,7 @@ while question is not None:
                 question = question.answer(None)
             else:
                 question = question.answer(question.melds[idx-1])
-        elif question.question == Question.SHOW_EKFCP_Q:
-            assert question.melds is not None
+        elif isinstance(question, qna.ShowEKFCP):
             print('Available Kongs to expose from concealed Pongs:',
                   '\t'.join(map(str, question.melds)))
             try:
@@ -89,8 +88,7 @@ while question is not None:
                 question = question.answer(None)
             else:
                 question = question.answer(question.melds[idx-1])
-        elif question.question == Question.SHOW_EKFEP_Q:
-            assert question.melds is not None
+        elif isinstance(question, qna.ShowEKFEP):
             print('Available Kongs to expose from exposed Pongs:',
                   '\t'.join(map(str, question.melds)))
             try:
@@ -99,29 +97,26 @@ while question is not None:
                 question = question.answer(None)
             else:
                 question = question.answer(question.melds[idx-1])
-        elif question.question == Question.SELF_DRAW_Q:
-            assert question.melds is not None
+        elif isinstance(question, qna.SelfDrawQ):
             print('You can win by self-draw with:', question.melds[0])
             inp = '?'
             while inp not in {'y', 'n'}:
                 inp = input('Do you want to? (y/n) ').casefold()
             question = question.answer(inp == 'y')
-        elif question.question == Question.ROB_KONG_Q:
-            assert question.melds is not None
+        elif isinstance(question, qna.RobKongQ):
             print('You can rob the last Kong to win with:', question.melds[0])
             inp = '?'
             while inp not in {'y', 'n'}:
                 inp = input('Do you want to? (y/n) ').casefold()
             question = question.answer(inp == 'y')
-        elif question.question == Question.WHICH_WU:
-            assert question.melds is not None
+        elif isinstance(question, qna.WhichWu):
             idx = int(input('Which Wu combo (enter index) do you want to win with? '))
             question = question.answer(question.melds[idx-1])
-    elif isinstance(question, HandEnding):
-        if question.result == HandResult.GOULASH:
+    elif isinstance(question, qna.HandEnding):
+        if isinstance(question, qna.Goulash):
             print('Goulash! Nobody wins. Starting next game...')
         else:
-            assert question.choice is not None and question.winner is not None
+            assert isinstance(question, (qna.NormalHandEnding))
             print('Player #%s won with %s (%s faan; %s points; %s)! Starting next game...' % (
                 question.winner.seat.value, ','.join(map(str, question.choice)),
                 question.faan()[0], *question.points(1)

@@ -1,25 +1,20 @@
 """All game-process-related classes."""
 from __future__ import annotations
-from enum import Enum
-from typing import Generator, List, Mapping, NamedTuple, Optional, \
+from typing import List, Mapping, NamedTuple, Optional, \
     Tuple, Union, Dict, overload
 from itertools import combinations
 import random
 from .tiles import BonusTile, Bonuses, Honors, Simples, Tile, Wind
 from .melds import Chow, Kong, Meld, Pong, Wu, WuFlag
 from .players import Player
+from . import qna
 
 # This is a really big file, but there's no way around it:
 # All of the classes depend on each other, so there's
 # a lot of circular imports if they are in different files.
 
 __all__ = [
-    'STOCK_TABLES',
     'TurnEnding',
-    'HandEnding',
-    'Question',
-    'UserIO',
-    'HandResult',
 
     'Game',
     'Round',
@@ -27,43 +22,7 @@ __all__ = [
     'Turn',
 ]
 
-STOCK_TABLES = {
-    'enwp': {
-        1: 1, 2: 1, 3: 1,
-        4: 2, 5: 2, 6: 2,
-        7: 4, 8: 4, 9: 4,
-        10: 8
-    },
-    'zhwp': {
-        0: 1, 1: 2, 2: 4, 3: 8,
-        4: 16, 5: 24, 6: 32, 7: 48,
-        8: 64, 9: 96, 10: 128, 11: 192,
-        12: 256, 13: 384
-    },
-    # in the app I play,
-    # 3 faan = 1200c = 1x1200
-    # 4 faan = 2400c = 2x1200
-    # 5 faan = 3600c = 3x1200
-    # 6 faan = 4800c = 4x1200
-    # 7 faan = 7200c = 6x1200
-    # 8 faan = 9600c = 8x1200
-    # 9 faan =13200c =11x1200
-    'random_app': {
-        1: 1, 2: 1, 3: 1,
-        4: 2, 5: 3, 6: 4,
-        7: 6, 8: 8, 9: 11,
-        10: 13
-    }
-}
-
 # data classes
-
-def _answer(gen: Generator, ans=None) -> YieldType:
-    """Send the answer to the internal generator."""
-    try:
-        return gen.send(ans)
-    except StopIteration as exc:
-        return exc.value
 
 class TurnEnding(NamedTuple):
     winner: Optional[Player] = None
@@ -73,144 +32,6 @@ class TurnEnding(NamedTuple):
     jumped_with: Optional[Meld] = None
     offered: bool = False
     prev_seat: Optional[Wind] = None
-
-class HandEnding(NamedTuple):
-    result: HandResult
-    hand: Hand
-    winner: Optional[Player] = None
-    wu: Optional[Wu] = None
-    choice: Optional[List[Meld]] = None
-
-    def answer(self, ans=None):
-        return _answer(self.hand.gen, ans)
-
-    def faan(self) -> Tuple[int, Optional[WuFlag]]:
-        """Calculate the faan for this hand."""
-        if self.winner is None or self.wu is None or self.choice is None:
-            return (0, None)
-        points = self.wu.faan(self.choice, (self.winner.seat, self.hand.wind))
-        bonus = self.winner.bonus_faan()
-        return (points[0] + bonus[0], points[1] | bonus[1])
-
-    def points(self, min_faan: int = 3,
-               table: Optional[Mapping[int, int]] = None
-               ) -> Tuple[List[int], Optional[WuFlag]]:
-        """Calculate the change in points for each player.
-
-        Parameters
-        -----------
-        ``min_faan``: int
-            Minimum faan before the hand is recognized as a valid winning hand
-        ``table``: Mapping[int, int]
-            Mapping of faan to base points. The largest faan value is assumed
-            to be the limit, and values larger than it will be mapped to it.
-
-        Returns
-        --------
-        Tuple[List[int], Optional[WuFlag]]
-            A list of four point deltas, representing each player, and
-            the flags that apply to this hand. The former is four zeroes,
-            and the latter is None, on goulash or not enough faan.
-        """
-        points = [0, 0, 0, 0]
-        if self.winner is None or self.wu is None or self.choice is None:
-            return (points, None)
-        faan, flags = self.faan()
-        if faan < min_faan:
-            return (points, None)
-        winner = self.winner
-        wu = self.wu
-        if table is None:
-            table = STOCK_TABLES['random_app']
-        limit = max(table.keys())
-        base = table[min(faan, limit)]
-        flags = wu.flags(self.choice)
-        # special penalties that make the perpetrator pay
-        # for everyone else on top of themselves
-        if ((WuFlag.TWELVE_PIECE in flags and WuFlag.SELF_DRAW in flags)
-            or (WuFlag.GAVE_KONG in flags and WuFlag.SELF_DRAW in flags)
-            or WuFlag.GAVE_DRAGON in flags) and wu.discarder is not None:
-            points[winner.seat] += base * 3
-            points[wu.discarder] -= base * 3
-        # loser pays double in normal losing conditions
-        elif wu.discarder is not None:
-            points[winner.seat] += base * 2
-            points[wu.discarder] -= base * 2
-        # self draw means everyone pays
-        elif WuFlag.SELF_DRAW in flags:
-            for i in range(4):
-                if i == winner.seat:
-                    points[i] += base * 3
-                else:
-                    points[i] -= base
-        else:
-            raise ValueError('Somehow, nobody gets points. '
-                             'Possibly report to maintainer with '
-                             'the following information: '
-                             + str(self.wu.__dict__)
-                             + ' ;; ' + str(self.winner.__dict__))
-        return (points, flags)
-
-class Question(Enum):
-    MELD_FROM_DISCARD_Q = 16
-    SHOW_EKFCP_Q = 23
-    SHOW_EKFEP_Q = 24
-    DISCARD_WHAT = 27
-    ROB_KONG_Q = 33
-    WHICH_WU = 40
-    READY_Q = 0
-    SELF_DRAW_Q = 13
-
-class UserIO(NamedTuple):
-    question: Question
-    gen: Generator
-    melds: Union[List[Meld], List[List[Meld]], None] = None
-    player: Optional[Player] = None
-    arrived: Optional[Tile] = None
-    last_meld: Optional[Meld] = None
-
-    @property
-    def hand(self) -> List[Tile]:
-        """Shortcut to .player.hand"""
-        if self.player is None:
-            raise AttributeError
-        return self.player.hand
-
-    @property
-    def playable_hand(self) -> List[Tile]:
-        """Shortcut to .player.hand, with the arrived tile removed
-        if present in the hand.
-        """
-        return [tile for tile in self.hand if tile is not self.arrived]
-
-    @property
-    def arrived_playable(self) -> bool:
-        """Whether the .arrived tile can be played from the hand
-        (i.e. whether it was drawn, not stolen to meld).
-        """
-        return any(tile is self.arrived for tile in self.hand)
-
-    @property
-    def shown(self) -> List[Meld]:
-        """Shortcut to .player.shown"""
-        if self.player is None:
-            raise AttributeError
-        return self.player.shown
-
-    def answer(self, ans=None):
-        return _answer(self.gen, ans)
-
-    def __repr__(self) -> str:
-        return f'UserIO(question={self.question}, melds={self.melds}, '\
-            f'arrived={self.arrived}, player={self.player})'
-
-class HandResult(Enum):
-    """The result of a hand."""
-    NORMAL = 0
-    GOULASH = 1
-    DEALER_WON = 2
-
-YieldType = Union[UserIO, HandEnding, None]
 
 # game process classes
 
@@ -224,7 +45,7 @@ class Game:
         self.init_players()
         self.extra_hands = house_rules.pop('extra_hands', True)
 
-    def play(self) -> Union[UserIO, HandEnding]:
+    def play(self) -> Union[qna.UserIO, qna.HandEnding]:
         """Play the game!
 
         Starts and stores a generator.
@@ -241,7 +62,7 @@ class Game:
         for i in range(4): # Step 01, 03
             self.round = Round(self)
             yield from self.round.execute(i) # Step 02
-            yield UserIO(Question.READY_Q, self.gen)
+            yield qna.ReadyQ(gen=self.gen)
 
     def init_players(self: Union[Game, Hand]) -> None:
         """Setup players."""
@@ -264,8 +85,8 @@ class Round:
         j = 0
         while j < 4: # Step 07
             self.hand = Hand(self)
-            result: HandEnding = (yield from self.hand.execute(i)) # Step 05
-            if result.result is HandResult.NORMAL: # Step 06
+            result: qna.HandEnding = (yield from self.hand.execute(i)) # Step 05
+            if isinstance(result, qna.NormalHandEnding): # Step 06
                 i += 1 # Step 04
                 j += 1
             elif not self.game.extra_hands: # house rules
@@ -335,7 +156,7 @@ class Hand:
         self._gave_dragon = {}
         self._gave_kong = {}
 
-    def play(self, wind: Wind = Wind.EAST) -> Union[UserIO, HandEnding]:
+    def play(self, wind: Wind = Wind.EAST) -> Union[qna.UserIO, qna.HandEnding]:
         """Play the hand standalone.
 
         ``wind``: The prevailing wind for this hand.
@@ -375,7 +196,7 @@ class Hand:
         # implies and not self.wall
         if ending.winner is None or ending.wu is None:
             # tie
-            return HandEnding(HandResult.GOULASH, self)
+            return qna.Goulash(hand=self)
         if len(self.wall) <= 0:
             ending.wu.base_flags |= WuFlag.LAST_CATCH
         if ending.winner in self._gave_dragon:
@@ -386,17 +207,15 @@ class Hand:
             ending.wu.base_flags |= WuFlag.TWELVE_PIECE
             ending.wu.discarder = self._12_piece[ending.winner].seat
         if len(ending.wu.melds) > 1:
-            question = UserIO(Question.WHICH_WU, self.gen,
-                              melds=ending.wu.melds)
+            question = qna.WhichWu(gen=self.gen, melds=ending.wu.melds)
             answer = (yield question)
         else:
             answer = ending.wu.melds[0]
         if ending.winner is self.players[self.wind]:
-            return HandEnding(
-                HandResult.DEALER_WON, self,
-                ending.winner, ending.wu, answer)
-        return HandEnding(
-            HandResult.NORMAL, self, ending.winner, ending.wu, answer)
+            return qna.DealerWon(hand=self, winner=ending.winner,
+                                 wu=ending.wu, choice=answer)
+        return qna.NormalHandEnding(hand=self, winner=ending.winner,
+                                    wu=ending.wu, choice=answer)
 
     def shuffle(self):
         """Generate and shuffle a new wall."""
@@ -500,8 +319,8 @@ class Turn:
                 except ValueError:
                     pass
                 else:
-                    question = UserIO(Question.SELF_DRAW_Q, self.gen,
-                                      [wu], player, drawn)
+                    question = qna.SelfDrawQ(gen=self.gen, player=player,
+                                             arrived=drawn, melds=[wu])
                     ans: bool = (yield question)
                     if ans:
                         return TurnEnding(winner=player, wu=wu)
@@ -520,8 +339,9 @@ class Turn:
         else:
             arrived = last_ending.discard
         player.hand.sort() # Step 26
-        question = UserIO(Question.DISCARD_WHAT, self.gen,
-                          player=player, arrived=arrived, last_meld=meld)
+        assert arrived is not None
+        question = qna.DiscardWhat(gen=self.gen, player=player,
+                                   arrived=arrived, last_meld=meld)
         answer: Tile = (yield question) # Step 27
         # Step 28
         player.hand.remove(answer)
@@ -573,8 +393,9 @@ class Turn:
             melds.append(wu)
         if melds:
             # Step 17
-            question = UserIO(Question.MELD_FROM_DISCARD_Q, self.gen,
-                              melds, player, last_ending.discard)
+            question = qna.MeldFromDiscardQ(gen=self.gen, player=player,
+                                            arrived=last_ending.discard,
+                                            melds=melds)
             answer: Optional[Meld] = (yield question)
             if answer is not None:
                 self.hand.discarded.pop() # Step 18
@@ -585,15 +406,15 @@ class Turn:
 
     def check_ekfp(self, draw: Tile, player: Player):
         """Check whether an Exposed Kong From (any) Pong is possible."""
-        kongs: List[Meld] = []
+        kongs: List[Kong] = []
         for quadruplet in combinations(player.hand, 4):
             if all(tile == quadruplet[0] for tile in quadruplet):
                 # Exposed Kong From Concealed Pong
                 kong = Kong(quadruplet)
                 kongs.append(kong)
         if kongs:
-            question = UserIO(Question.SHOW_EKFCP_Q, self.gen,
-                              melds=kongs, player=player, arrived=draw)
+            question = qna.ShowEKFCP(gen=self.gen, melds=kongs,
+                                     player=player, arrived=draw)
             answer: Optional[Kong] = (yield question)
             if answer is not None:
                 for tile in answer.tiles:
@@ -611,8 +432,8 @@ class Turn:
                 kong = Kong(meld.tiles + (player.hand[match],))
                 kongs.append(kong)
         if kongs:
-            question = UserIO(Question.SHOW_EKFEP_Q, self.gen,
-                              melds=kongs, player=player, arrived=draw)
+            question = qna.ShowEKFEP(
+                gen=self.gen, melds=kongs, player=player, arrived=draw)
             answer: Optional[Kong] = (yield question)
             if answer is not None:
                 player.shown.remove(Pong(answer.tiles[:3]))
@@ -630,8 +451,7 @@ class Turn:
                 wu = Wu(p.hand + [tile], p.shown, tile, victim.seat, WuFlag.ROBBING_KONG)
             except ValueError:
                 continue
-            question = UserIO(Question.ROB_KONG_Q, self.gen,
-                              melds=[wu], player=p)
+            question = qna.RobKongQ(gen=self.gen, melds=[wu], player=p)
             answer: bool = (yield question)
             if answer:
                 return (wu, p)
@@ -680,8 +500,8 @@ class Turn:
         pairs.sort(key=lambda i: i[1])
         for player, meld in pairs:
             # Step 30, 32
-            question = UserIO(
-                Question.MELD_FROM_DISCARD_Q, self.gen, melds=overall[player],
+            question = qna.MeldFromDiscardQ(
+                gen=self.gen, melds=overall[player],
                 player=player, arrived=discard)
             answer: Optional[Meld] = (yield question)
             if answer is not None:

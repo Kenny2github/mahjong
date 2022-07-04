@@ -68,3 +68,4 @@ from .players import *
 from .melds import *
 from .tiles import *
 from .game import *
+from .qna import *
