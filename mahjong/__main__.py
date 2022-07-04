@@ -41,7 +41,7 @@ print("It requires trust that each player won't look at the other's privacy.")
 print("Please don't actually use this. Make something even a tiny bit better.")
 print("With that said, let's start.")
 
-question = game.play()
+question: qna.YieldType = game.play()
 while question is not None:
     if isinstance(question, qna.UserIO):
         if isinstance(question, qna.ReadyQ):
@@ -79,8 +79,8 @@ while question is not None:
                 question = question.answer(None)
             else:
                 question = question.answer(question.melds[idx-1])
-        elif isinstance(question, qna.ShowEKFCP):
-            print('Available Kongs to expose from concealed Pongs:',
+        elif isinstance(question, qna.ShowEKFEP):
+            print('Available Kongs to expose from exposed Pongs:',
                   '\t'.join(map(str, question.melds)))
             try:
                 idx = int(input('Enter index of Kong to expose, or blank to not expose: '))
@@ -88,8 +88,8 @@ while question is not None:
                 question = question.answer(None)
             else:
                 question = question.answer(question.melds[idx-1])
-        elif isinstance(question, qna.ShowEKFEP):
-            print('Available Kongs to expose from exposed Pongs:',
+        elif isinstance(question, qna.ShowEKFCP):
+            print('Available Kongs to expose from concealed Pongs:',
                   '\t'.join(map(str, question.melds)))
             try:
                 idx = int(input('Enter index of Kong to expose, or blank to not expose: '))
@@ -116,7 +116,6 @@ while question is not None:
         if isinstance(question, qna.Goulash):
             print('Goulash! Nobody wins. Starting next game...')
         else:
-            assert isinstance(question, (qna.NormalHandEnding))
             print('Player #%s won with %s (%s faan; %s points; %s)! Starting next game...' % (
                 question.winner.seat.value, ','.join(map(str, question.choice)),
                 question.faan()[0], *question.points(1)

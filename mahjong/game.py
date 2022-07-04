@@ -45,7 +45,7 @@ class Game:
         self.init_players()
         self.extra_hands = house_rules.pop('extra_hands', True)
 
-    def play(self) -> Union[qna.UserIO, qna.HandEnding]:
+    def play(self) -> Union[qna.UserIOType, qna.HandEndingType]:
         """Play the game!
 
         Starts and stores a generator.
@@ -85,7 +85,8 @@ class Round:
         j = 0
         while j < 4: # Step 07
             self.hand = Hand(self)
-            result: qna.HandEnding = (yield from self.hand.execute(i)) # Step 05
+            result: qna.HandEndingType = (
+                yield from self.hand.execute(i)) # Step 05
             if isinstance(result, qna.NormalHandEnding): # Step 06
                 i += 1 # Step 04
                 j += 1
@@ -156,7 +157,8 @@ class Hand:
         self._gave_dragon = {}
         self._gave_kong = {}
 
-    def play(self, wind: Wind = Wind.EAST) -> Union[qna.UserIO, qna.HandEnding]:
+    def play(self, wind: Wind = Wind.EAST
+             ) -> Union[qna.UserIOType, qna.HandEndingType]:
         """Play the hand standalone.
 
         ``wind``: The prevailing wind for this hand.

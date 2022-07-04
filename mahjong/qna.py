@@ -113,7 +113,6 @@ class RobKongQ(PlayeredIO):
     _question = Question.ROB_KONG_Q
 
     melds: List[Wu]
-    player: Player
 
     def answer(self, ans: bool):
         return super().answer(ans)
@@ -153,6 +152,9 @@ class WhichWu(UserIO):
 
     def answer(self, ans: List[Meld]):
         return super().answer(ans)
+
+UserIOType = Union[DiscardWhat, MeldFromDiscardQ, ReadyQ, RobKongQ, SelfDrawQ,
+                   ShowEKFCP, ShowEKFEP, WhichWu]
 
 # HandEnding
 
@@ -274,8 +276,6 @@ class NormalHandEnding(HandEnding):
                              + ' ;; ' + str(self.winner.__dict__))
         return (points, flags)
 
-
-
 @dataclass
 class Goulash(HandEnding):
     _result = HandResult.GOULASH
@@ -292,4 +292,6 @@ class Goulash(HandEnding):
 class DealerWon(NormalHandEnding):
     _result = HandResult.DEALER_WON
 
-YieldType = Union[UserIO, HandEnding, None]
+HandEndingType = Union[NormalHandEnding, Goulash, DealerWon]
+
+YieldType = Union[UserIOType, HandEndingType, None]
