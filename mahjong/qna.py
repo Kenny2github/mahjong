@@ -43,7 +43,7 @@ class UserIO:
         return f'{type(self).__name__}({args})'
 
 @dataclass
-class _PlayeredIO(UserIO):
+class PlayeredIO(UserIO):
     player: Player
 
     @property
@@ -57,7 +57,7 @@ class _PlayeredIO(UserIO):
         return self.player.shown
 
 @dataclass
-class _ArrivedIO(_PlayeredIO):
+class ArrivedIO(PlayeredIO):
     arrived: Tile
 
     @property

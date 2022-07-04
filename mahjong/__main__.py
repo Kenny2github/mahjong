@@ -48,7 +48,7 @@ while question is not None:
             input('Hit Enter when ready for the next round.')
             question = question.answer()
             continue
-        assert isinstance(question, qna._ArrivedIO)
+        assert isinstance(question, qna.ArrivedIO)
         hand_minus_tile = [tile for tile in question.player.hand
                            if tile is not question.arrived]
         print('Question for Player #%s' % question.player.seat.value)
