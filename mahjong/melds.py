@@ -19,6 +19,74 @@ __all__ = [
 ]
 
 class WuFlag(Flag):
+    """Possible criteria that a :class:`Wu` may fulfil.
+
+    .. note:: When a flag is implied, its faan may or may not be included.
+
+    Attributes:
+        CHICKEN_HAND: The worst type of winning hand. Worth no faan.
+        COMMON_HAND: Every :class:`Meld` is a :class:`Chow`.
+        ALL_IN_TRIPLETS: Every :class:`Meld` is either a
+            :class:`Pong` or :class:`Kong`.
+        MIXED_ONE_SUIT: Every :class:`Tile` is an :class:`Honors`
+            or from the same suit.
+        ALL_ONE_SUIT: Every :class:`Tile` is from the same suit.
+        ALL_HONOR_TILES: Every :class:`Tile` is an :class:`Honors`.
+        SMALL_DRAGONS: A :class:`Meld` for two :class:`Dragon` types,
+            and a pair of :class:`Eyes` for the third.
+        GREAT_DRAGONS: A :class:`Meld` for every :class:`Dragon` type.
+        SMALL_WINDS: A :class:`Meld` for three :class:`Wind` directions,
+            and a pair of :class:`Eyes` for the fourth.
+        GREAT_WINDS: A :class:`Meld` for every :class:`Wind` direction.
+        NINE_GATES: 1112345678999 plus one more tile, all from one suit.
+            :attr:`ALL_ONE_SUIT` is implied.
+        ALL_KONGS: Every :class:`Meld` is a :class:`Kong`.
+        SELF_TRIPLETS: Every :class:`Meld` is an unrevealed :class:`Pong`.
+            :attr:`ALL_IN_TRIPLETS` is implied.
+        ORPHANS: Every :class:`Meld` is a :class:`Pong` of ones or nines.
+            :attr:`ALL_IN_TRIPLETS` is implied.
+        THIRTEEN_ORPHANS: A special case - a one and nine from every suit,
+            plus one of every :class:`Honors` tile, plus any other tile.
+        SEAT_WIND: A :class:`Meld` is of the winner's seat :class:`Wind`.
+        PREVAILING_WIND: A :class:`Meld` is of the prevailing :class:`Wind`.
+        RED_DRAGON: A :class:`Meld` is of :attr:`Dragon.RED`.
+        GREEN_DRAGON: A :class:`Meld` is of :attr:`Dragon.GREEN`.
+        WHITE_DRAGON: A :class:`Meld` is of :attr:`Dragon.WHITE`.
+        MIXED_ORPHANS: All tiles are either ones, nines, or :class:`Honors`.
+        SELF_DRAW: The winning :class:`Tile` was drawn, not stolen.
+        ALL_FROM_WALL: No :class:`Meld` was shown until the end.
+        ROBBING_KONG: The winning :class:`Tile` was stolen from
+            a :class:`Kong` someone else had declared.
+        LAST_CATCH: The winning :class:`Tile` was the last draw or discard.
+        BY_KONG: The winning :class:`Tile` was drawn to compensate
+            a :class:`Kong`.
+        DOUBLE_KONG: The winning :class:`Tile` was drawn to compensate
+            a :class:`Kong` formed from a :class:`Tile` that was drawn
+            to compensate a :class:`Kong`.
+        HEAVENLY: :attr:`~Wind.EAST` :class:`Player` wins without playing.
+        EARTHLY: A :class:`Player` other than :attr:`~Wind.EAST`
+            wins by stealing their first discard.
+        TWELVE_PIECE: When :class:`Player` 2 (for example) steals a tile
+            from player 1 to form their 4th :class:`Meld`, and then
+            gets to :attr:`SELF_DRAW`, player 1 suffers this penalty.
+        GAVE_DRAGON: When :class:`Player` 2 (for example) steals a
+            :class:`Dragon` :class:`Tile` from player 1 to form their
+            3rd Dragon meld, and then later wins, player 1 suffers this
+            penalty. Even if player 3 or 4 discarded the tile that let
+            player 2 win, player 1 still suffers the penalty in their place.
+        GAVE_KONG: When :class:`Player` 2 (for example) steals a tile from
+            player 1 that was previously unseen to form a :class:`Kong`,
+            and then wins :attr:`BY_KONG`, player 1 suffers this penalty.
+        NO_BONUSES: The :class:`Player` collected zero :class:`Bonuses`.
+        ALIGNED_FLOWERS: The :class:`Player` collected a :class:`Flower`
+            that aligns with their seat.
+        ALIGNED_SEASONS: The :class:`Player` collected a :class:`Season`
+            that aligns with their seat.
+        TABLE_OF_FLOWERS: The :class:`Player` collected every :class:`Flower`.
+        TABLE_OF_SEASONS: The :class:`Player` collected every :class:`Season`.
+        HAND_OF_BONUSES: The :class:`Player` collected all :class:`Bonuses`.
+            This is an immediate winning hand, regardless of their real tiles.
+    """
     CHICKEN_HAND = 0
 
     # types

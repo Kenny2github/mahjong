@@ -19,6 +19,20 @@ def _answer(gen: Generator, ans=None) -> YieldType:
 # UserIO
 
 class Question(Enum):
+    """The question that is being asked.
+
+    .. deprecated:: 2.0.0
+
+    Attributes:
+        MELD_FROM_DISCARD_Q: :class:`MeldFromDiscardQ`
+        SHOW_EKFCP_Q: :class:`ShowEKFCP`
+        SHOW_EKFEP_Q: :class:`ShowEKFEP`
+        DISCARD_WHAT: :class:`DiscardWhat`
+        ROB_KONG_Q: :class:`RobKongQ`
+        WHICH_WU: :class:`WhichWu`
+        READY_Q: :class:`ReadyQ`
+        SELF_DRAW_Q: :class:`SelfDrawQ`
+    """
     MELD_FROM_DISCARD_Q = 16
     SHOW_EKFCP_Q = 23
     SHOW_EKFEP_Q = 24
@@ -293,7 +307,15 @@ STOCK_TABLES = {
 }
 
 class HandResult(Enum):
-    """The result of a hand."""
+    """The result of a hand.
+
+    .. deprecated:: 2.0.0
+
+    Attributes:
+        NORMAL: :class:`NormalHandEnding`
+        GOULASH: :class:`Goulash`
+        DEALER_WON: :class:`DealerWon`
+    """
     NORMAL = 0
     GOULASH = 1
     DEALER_WON = 2

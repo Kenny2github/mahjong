@@ -25,49 +25,98 @@ class Suit(Enum):
     pass
 
 class Simples(Suit):
-    """Enum for simples suits (numbered from 1-9)"""
+    """Enum for simples suits (numbered from 1-9).
+
+    Attributes:
+        ZHU: 竹 - Bamboo
+        TONG: 銅 - Bronze/Dots
+        WAN: 萬 - Myriad/Characters
+    """
     ZHU = 'zhu'
     TONG = 'tong'
     WAN = 'wan'
 
 class Honors(Suit):
-    """Enum for honors suits (tiles that cannot Chow)"""
+    """Enum for honors suits (tiles that cannot :class:`Chow`).
+
+    Attributes:
+        FENG: 風 - :class:`Wind`
+        LONG: 龍 - :class:`Dragon`
+    """
     FENG = 'feng'  # value is instance of Wind
     LONG = 'long'  # value is instance of Dragon
 
 class Bonuses(Suit):
-    """Enum for bonus suits (tiles that only count when you win)"""
+    """Enum for bonus suits (tiles that only count when you win).
+
+    Attributes:
+        HUA: 花 - :class:`Flower`
+        GUI: 季 - :class:`Season` (wrong pinyin but too late to change it)
+    """
     HUA = 'hua'
     GUI = 'gui'
 
 class Misc(Suit):
-    """Enum for special case suits"""
+    """Enum for special case suits.
+
+    Attributes:
+        UNKNOWN: Mystery suit.
+        HIDDEN: Hidden in a :class:`Kong` display.
+        MISSING: No tile here.
+    """
     UNKNOWN = '?'
     HIDDEN = 'k'
     MISSING = ' '
 
 class Wind(IntEnum):
-    """Represents a wind direction"""
+    """Represents a wind direction.
+
+    Attributes:
+        EAST: 東 - First wind.
+        SOUTH: 南 - Second wind.
+        WEST: 西 - Third wind.
+        NORTH: 北 - Fourth wind.
+    """
     EAST = 0
     SOUTH = 1
     WEST = 2
     NORTH = 3
 
 class Dragon(IntEnum):
-    """Represents a dragon"""
+    """Represents a dragon.
+
+    Attributes:
+        RED: 紅中
+        GREEN: 發財
+        WHITE: 白板
+    """
     RED = 0 # hong zhong
     GREEN = 1 # fa cai
     WHITE = 2 # bai ban
 
 class Flower(IntEnum):
-    """Represents a Flowers tile"""
+    """Represents a Flowers tile.
+
+    Attributes:
+        MEI: 梅 - Plum blossom - first flower
+        LAN: 蘭 - Orchid - second flower
+        JU: 菊 - Chrysanthemum - third flower
+        ZHU: 竹 - Bamboo - fourth flower
+    """
     MEI = Wind.EAST.value
     LAN = Wind.SOUTH.value
     JU = Wind.WEST.value
     ZHU = Wind.NORTH.value
 
 class Season(IntEnum):
-    """Represents a Seasons tile"""
+    """Represents a Seasons tile.
+
+    Attributes:
+        SPRING: 春 - First season
+        SUMMER: 夏 - Second season
+        AUTUMN: 秋 - Third season
+        WINTER: 冬 - Fourth season
+    """
     SPRING = Wind.EAST.value
     SUMMER = Wind.SOUTH.value
     AUTUMN = Wind.WEST.value
