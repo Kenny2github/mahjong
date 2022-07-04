@@ -30,10 +30,16 @@ class Question(Enum):
 
 @dataclass
 class UserIO:
+    """A question to be answered."""
+
     _question: ClassVar[Question]
 
     @property
     def question(self) -> Question:
+        """The question that is being asked.
+
+        .. deprecated:: 2.0.0
+        """
         from warnings import warn
         warn('The question attribute is deprecated '
              'in favor of checking the type of the question '
@@ -43,6 +49,11 @@ class UserIO:
     gen: Generator
 
     def answer(self, ans=None):
+        """Answer the question.
+
+        Args:
+            ans: The answer. See specific subclasses for details.
+        """
         return _answer(self.gen, ans)
 
     def __repr__(self) -> str:
@@ -53,99 +64,193 @@ class UserIO:
 
 @dataclass
 class PlayeredIO(UserIO):
+    """A :class:`UserIO` with a :attr:`~PlayeredIO.player` attribute.
+
+    Attributes:
+        player: See specific subclasses' docs.
+    """
     player: Player
 
     @property
     def hand(self) -> List[Tile]:
-        """Shortcut to .player.hand"""
+        """Shortcut to ``.player.hand``."""
         return self.player.hand
 
     @property
     def shown(self) -> List[Meld]:
-        """Shortcut to .player.shown"""
+        """Shortcut to ``.player.shown``."""
         return self.player.shown
 
 @dataclass
 class ArrivedIO(PlayeredIO):
+    """A :class:`PlayeredIO` with an :attr:`arrived` attribute.
+
+    Attributes:
+        arrived: See specific subclasses' docs.
+    """
     arrived: Tile
 
     @property
     def playable_hand(self) -> List[Tile]:
-        """Shortcut to .player.hand, with the arrived tile removed
-        if present in the hand.
+        """Shortcut to ``.player.hand``, with the :attr:`arrived`
+        tile removed if present in the hand.
         """
         return [tile for tile in self.hand if tile is not self.arrived]
 
     @property
     def arrived_playable(self) -> bool:
-        """Whether the .arrived tile can be played from the hand
-        (i.e. whether it was drawn, not stolen to meld).
+        """Whether the :attr:`arrived` tile can be played
+        from the hand (i.e. whether it was drawn, not stolen to meld).
         """
         return any(tile is self.arrived for tile in self.hand)
 
 @dataclass
 class DiscardWhat(ArrivedIO):
+    """Which tile would you like to discard?
+
+    Attributes:
+        player: The player who needs to discard.
+        arrived: The tile that was drawn or stolen, which may be either
+            in the :attr:`hand` if it was drawn or in one of the
+            :attr:`shown` melds' tiles.
+        last_meld: The meld that was made most recently.
+            :obj:`None` if purely a draw.
+    """
     _question = Question.DISCARD_WHAT
 
     last_meld: Optional[Meld]
 
     def answer(self, ans: Tile):
+        """Answer the question.
+
+        Args:
+            ans: The tile to discard.
+                (Must be a reference to an item in the player's hand.)
+        """
         return super().answer(ans)
 
 @dataclass
 class MeldFromDiscardQ(ArrivedIO):
+    """What meld would you like to make from the last discard?
+
+    Attributes:
+        melds: Different possible melds that the player can make
+            with the last discard.
+        player: The player who can make the meld(s).
+        arrived: The last discard in question
+            (**not** present in the player's hand).
+    """
     _question = Question.MELD_FROM_DISCARD_Q
 
     melds: List[Meld]
 
     def answer(self, ans: Optional[Meld] = None):
+        """Answer the question.
+
+        Args:
+            ans: Which meld to make (must be a reference to an item from the
+                provided list), or :obj:`None` to choose not to meld.
+        """
         return super().answer(ans)
 
 @dataclass
 class ReadyQ(UserIO):
+    """The round has just ended, are you ready to continue to the next one?"""
     _question = Question.READY_Q
 
     def answer(self):
+        """Answer to continue."""
         return super().answer()
 
 @dataclass
 class RobKongQ(PlayeredIO):
+    """Do you want to rob someone's Kong to win?
+
+    Attributes:
+        melds: A 1-list containing the winning hand that can be made.
+        player: The player that can win with this hand.
+    """
     _question = Question.ROB_KONG_Q
 
     melds: List[Wu]
 
     def answer(self, ans: bool):
+        """Answer the question.
+
+        Args:
+            ans: Whether to rob the Kong to win.
+        """
         return super().answer(ans)
 
 @dataclass
 class SelfDrawQ(ArrivedIO):
+    """You have drawn a tile that you can win with, would you like to?
+
+    Attributes:
+        melds: One-element list containing the hand you can win with.
+        player: The player that can win with this hand.
+        arrived: The tile that was drawn (already in the :attr:`hand`).
+    """
     _question = Question.SELF_DRAW_Q
 
     melds: List[Wu]
 
     def answer(self, ans: bool):
+        """Answer the question.
+
+        Args:
+            ans: Whether to take this self-draw.
+        """
         return super().answer(ans)
 
 @dataclass
 class ShowEKFCP(ArrivedIO):
+    """Would you like to show an Exposed Kong From Concealed Pong?
+
+    (Only covers EKFCP by draw; by theft is covered by
+    :class:`MeldFromDiscardQ`.)
+
+    Attributes:
+        melds: Possible Kongs you could show.
+        player: The player who can make the Kong(s).
+        arrived: The last tile drawn (**already** present in the :attr:`hand`,
+            may or may not be related to any of the offered Kongs).
+    """
     _question = Question.SHOW_EKFCP_Q
 
     melds: List[Kong]
 
     def answer(self, ans: Optional[Kong] = None):
+        """Answer the question.
+
+        Args:
+            ans: Which Kong to make (must be a reference to an item from the
+                provided list), or :obj:`None` to choose not to meld.
+        """
         return super().answer(ans)
 
 @dataclass
-class ShowEKFEP(ArrivedIO):
+class ShowEKFEP(ShowEKFCP):
+    """Same deal as :class:`ShowEKFCP` but exposed Pong instead.
+
+    .. warning::
+
+        This inherits from :class:`ShowEKFCP`, so call :func:`isinstance`
+        on this class **first**, before the other one.
+    """
     _question = Question.SHOW_EKFEP_Q
-
-    melds: List[Kong]
-
-    def answer(self, ans: Optional[Kong] = None):
-        return super().answer(ans)
 
 @dataclass
 class WhichWu(UserIO):
+    """There are multiple valid arrangements of tiles to win;
+    which one do you want to win with?
+
+    Not asked when there is only one arrangement.
+
+    Attributes:
+        melds: Each list of :class:`Meld` s is a valid combination of them
+            to make a winning hand.
+    """
     _question = Question.WHICH_WU
 
     melds: List[List[Meld]]
@@ -195,10 +300,19 @@ class HandResult(Enum):
 
 @dataclass
 class HandEnding:
+    """The ending conditions of a hand.
+
+    The implied question is "The hand has just ended, are you ready to
+    continue to the next one? Answer to continue."
+    """
     _result: ClassVar[HandResult]
 
     @property
     def result(self) -> HandResult:
+        """The result type.
+
+        .. deprecated:: 2.0.0
+        """
         from warnings import warn
         warn('The result attribute is deprecated '
              'in favor of checking the type of the result '
@@ -207,11 +321,21 @@ class HandEnding:
 
     hand: Hand
 
-    def answer(self, ans=None):
-        return _answer(self.hand.gen, ans)
+    def answer(self):
+        """Answer the ending and receive the next question
+        (which can be :obj:`None` for a standalone hand).
+        """
+        return _answer(self.hand.gen)
 
 @dataclass
 class NormalHandEnding(HandEnding):
+    """A normal win; play advances.
+
+    Attributes:
+        winner: The player who won the hand.
+        wu: The winning hand.
+        choice: The particular arrangement of melds to win.
+    """
     _result = HandResult.NORMAL
 
     winner: Player
@@ -219,7 +343,12 @@ class NormalHandEnding(HandEnding):
     choice: List[Meld]
 
     def faan(self) -> Tuple[int, WuFlag]:
-        """Calculate the faan for this hand."""
+        """Calculate the faan for this hand.
+
+        Returns:
+            ``(points, flags)``: Combined from :meth:`Wu.faan` (:attr:`wu`)
+            and :meth:`Player.bonus_faan` (:attr:`winner`).
+        """
         points = self.wu.faan(self.choice, (self.winner.seat, self.hand.wind))
         bonus = self.winner.bonus_faan()
         return (points[0] + bonus[0], points[1] | bonus[1])
@@ -230,14 +359,17 @@ class NormalHandEnding(HandEnding):
         """Calculate the change in points for each player.
 
         Args:
-        min_faan: Minimum faan for hand to be recognized as valid winning hand.
-        table: Mapping of faan to base points. The largest faan value is assumed
-            to be the limit, and values larger than it will be mapped to it.
+            min_faan: Minimum faan for the hand to produce points.
+            table: A translation table of faan to base points. The largest
+                faan value is assumed to be the limit, and values larger than
+                it will be mapped to it.
 
         Returns:
-            A list of four point deltas, representing each player, and
-            the flags that apply to this hand. If the faan is not enough,
-            ``([0, 0, 0, 0], None)`` is returned.
+            ``([dp1, dp2, dp3, dp4], flags)`` where only one ``dpn`` is
+            positive and ``flags`` represent ending flags.
+
+        Returns:
+            ``([0, 0, 0, 0], None)`` if ``min_faan`` is not met.
         """
         points = [0, 0, 0, 0]
         faan, flags = self.faan()
@@ -278,18 +410,44 @@ class NormalHandEnding(HandEnding):
 
 @dataclass
 class Goulash(HandEnding):
+    """The hand ended in a draw (goulash hand),
+    so an extra round will be played with the seat winds unchanged
+    (unless that rule is disabled).
+
+    No attributes.
+    """
     _result = HandResult.GOULASH
 
     def faan(self) -> Tuple[int, None]:
-        """Goulash endings have no faan and no flags."""
+        """Goulash endings have no faan and no flags.
+
+        Returns:
+            ``(0, None)``
+        """
         return (0, None)
 
     def points(self, min_faan: int = 3,
                table: Optional[Mapping[int, int]] = None
                ) -> Tuple[List[int], None]:
+        """Goulash endings give nobody points and have no flags.
+
+        Returns:
+            ``([0, 0, 0, 0], None)``
+        """
         return ([0, 0, 0, 0], None)
 
 class DealerWon(NormalHandEnding):
+    """The player in the prevailing wind seat won,
+    so an extra round will be played with the seat winds unchanged
+    (unless that rule is disabled).
+
+    Same attributes as :class:`NormalHandEnding`.
+
+    .. warning::
+
+        This inherits from :class:`NormalHandEnding`, so call
+        :func:`isinstance` on this class **first**, before the other one.
+    """
     _result = HandResult.DEALER_WON
 
 HandEndingType = Union[NormalHandEnding, Goulash, DealerWon]

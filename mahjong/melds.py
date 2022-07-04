@@ -237,10 +237,12 @@ class Eyes(_SameNum):
 class Wu(Meld):
     """Represents a winning hand. This can only consist of sub-melds.
 
-    WARNING: for some hands, instantiating this class is NOT atomic.
-    So far I have discovered hands that take a full second or two.
-    Consider instantiating this class a blocking procedure, and
-    treat it as such, e.g. in asynchronous contexts.
+    .. warning::
+
+        For some hands, instantiating this class is NOT atomic.
+        So far I have discovered hands that take a full second or two.
+        Consider instantiating this class a blocking procedure, and
+        treat it as such, e.g. in asynchronous contexts.
     """
 
     size: range = range(14, 19) # [14, 18]
@@ -506,22 +508,18 @@ class Wu(Meld):
         return types
 
     def faan(self, choice: Sequence[Meld],
-              winds: Optional[Tuple[int, int]] = None) -> Tuple[int, WuFlag]:
+             winds: Optional[Tuple[int, int]] = None) -> Tuple[int, WuFlag]:
         """Number of faan points the Wu is worth.
 
-        Parameters
-        -----------
-        ``choice``: Sequence[Meld]
-            Which combination of melds from the possible
-            set to calculate the points for.
-        ``winds``: Optional[Tuple[int, int]]
-            If specified as (seat, prevailing), this provides the necessary
-            context to include the Seat Wind and Prevailing Wind Wu flags.
+        Args:
+            choice: Which combination of melds from the possible
+                set to calculate the points for.
+            winds: If specified as ``(seat, prevailing)``, this provides the
+                necessary context to include the Seat Wind and Prevailing Wind
+                Wu flags.
 
-        Returns
-        --------
-        Tuple[int, WuFlag]
-            (points, flags): flags represents all of the features of a Wu
+        Returns:
+            ``(points, flags)`` - flags represents all of the features of a Wu
             that are true for this particular combination.
         """
         types = self.flags(choice, winds)
