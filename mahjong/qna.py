@@ -30,7 +30,16 @@ class Question(Enum):
 
 @dataclass
 class UserIO:
-    question: ClassVar[Question]
+    _question: ClassVar[Question]
+
+    @property
+    def question(self) -> Question:
+        from warnings import warn
+        warn('The question attribute is deprecated '
+             'in favor of checking the type of the question '
+             'using isinstance().', DeprecationWarning)
+        return self._question
+
     gen: Generator
 
     def answer(self, ans=None):
@@ -75,8 +84,8 @@ class ArrivedIO(PlayeredIO):
         return any(tile is self.arrived for tile in self.hand)
 
 @dataclass
-class DiscardWhat(_ArrivedIO):
-    question = Question.DISCARD_WHAT
+class DiscardWhat(ArrivedIO):
+    _question = Question.DISCARD_WHAT
 
     last_meld: Optional[Meld]
 
@@ -84,8 +93,8 @@ class DiscardWhat(_ArrivedIO):
         return super().answer(ans)
 
 @dataclass
-class MeldFromDiscardQ(_ArrivedIO):
-    question = Question.MELD_FROM_DISCARD_Q
+class MeldFromDiscardQ(ArrivedIO):
+    _question = Question.MELD_FROM_DISCARD_Q
 
     melds: List[Meld]
 
@@ -94,14 +103,14 @@ class MeldFromDiscardQ(_ArrivedIO):
 
 @dataclass
 class ReadyQ(UserIO):
-    question = Question.READY_Q
+    _question = Question.READY_Q
 
     def answer(self):
         return super().answer()
 
 @dataclass
-class RobKongQ(_PlayeredIO):
-    question = Question.ROB_KONG_Q
+class RobKongQ(PlayeredIO):
+    _question = Question.ROB_KONG_Q
 
     melds: List[Wu]
     player: Player
@@ -110,8 +119,8 @@ class RobKongQ(_PlayeredIO):
         return super().answer(ans)
 
 @dataclass
-class SelfDrawQ(_ArrivedIO):
-    question = Question.SELF_DRAW_Q
+class SelfDrawQ(ArrivedIO):
+    _question = Question.SELF_DRAW_Q
 
     melds: List[Wu]
 
@@ -119,8 +128,8 @@ class SelfDrawQ(_ArrivedIO):
         return super().answer(ans)
 
 @dataclass
-class ShowEKFCP(_ArrivedIO):
-    question = Question.SHOW_EKFCP_Q
+class ShowEKFCP(ArrivedIO):
+    _question = Question.SHOW_EKFCP_Q
 
     melds: List[Kong]
 
@@ -128,8 +137,8 @@ class ShowEKFCP(_ArrivedIO):
         return super().answer(ans)
 
 @dataclass
-class ShowEKFEP(_ArrivedIO):
-    question = Question.SHOW_EKFEP_Q
+class ShowEKFEP(ArrivedIO):
+    _question = Question.SHOW_EKFEP_Q
 
     melds: List[Kong]
 
@@ -138,7 +147,7 @@ class ShowEKFEP(_ArrivedIO):
 
 @dataclass
 class WhichWu(UserIO):
-    question = Question.WHICH_WU
+    _question = Question.WHICH_WU
 
     melds: List[List[Meld]]
 
@@ -184,7 +193,16 @@ class HandResult(Enum):
 
 @dataclass
 class HandEnding:
-    result: ClassVar[HandResult]
+    _result: ClassVar[HandResult]
+
+    @property
+    def result(self) -> HandResult:
+        from warnings import warn
+        warn('The result attribute is deprecated '
+             'in favor of checking the type of the result '
+             'using isinstance().', DeprecationWarning)
+        return self._result
+
     hand: Hand
 
     def answer(self, ans=None):
@@ -192,7 +210,7 @@ class HandEnding:
 
 @dataclass
 class NormalHandEnding(HandEnding):
-    result = HandResult.NORMAL
+    _result = HandResult.NORMAL
 
     winner: Player
     wu: Wu
@@ -260,7 +278,7 @@ class NormalHandEnding(HandEnding):
 
 @dataclass
 class Goulash(HandEnding):
-    result = HandResult.GOULASH
+    _result = HandResult.GOULASH
 
     def faan(self) -> Tuple[int, None]:
         """Goulash endings have no faan and no flags."""
@@ -272,6 +290,6 @@ class Goulash(HandEnding):
         return ([0, 0, 0, 0], None)
 
 class DealerWon(NormalHandEnding):
-    result = HandResult.DEALER_WON
+    _result = HandResult.DEALER_WON
 
 YieldType = Union[UserIO, HandEnding, None]
