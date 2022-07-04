@@ -243,7 +243,7 @@ class Wu(Meld):
     treat it as such, e.g. in asynchronous contexts.
     """
 
-    size = range(14, 19) # [14, 18]
+    size: range = range(14, 19) # [14, 18]
     melds: List[List[Meld]]
     fixed_melds: List[Meld]
     arrived: Optional[Tile]
@@ -258,8 +258,10 @@ class Wu(Meld):
         tiles.sort()
         return tiles
 
-    def __init__(self, tiles: Iterable[Tile], melds: Iterable[Meld] = None,
-                 arrived: Tile = None, discarder: Optional[int] = None,
+    def __init__(self, tiles: Iterable[Tile],
+                 melds: Optional[Iterable[Meld]] = None,
+                 arrived: Optional[Tile] = None,
+                 discarder: Optional[int] = None,
                  flags: WuFlag = WuFlag.CHICKEN_HAND):
         """Check validity upon initialization."""
         self.tiles = tuple(sorted(tiles))
@@ -371,7 +373,7 @@ class Wu(Meld):
         return sorted((i, j) for j, i in trips.items())
 
     def flags(self, choice: Sequence[Meld],
-             winds: Tuple[int, int] = None) -> WuFlag:
+             winds: Optional[Tuple[int, int]] = None) -> WuFlag:
         """WuFlags that apply to this choice of winning hand."""
         all_tiles = self.all_tiles
         types = self.base_flags
@@ -431,7 +433,7 @@ class Wu(Meld):
             if WuFlag.SELF_DRAW in types or ( # self draw or
                 self.arrived is not None
                 # stolen discard not in regular melds,
-                and all(self.arrived not in meld
+                and all(self.arrived not in meld.tiles
                         for meld in choice
                         if not isinstance(meld, Eyes))
                 # only eyes
@@ -504,7 +506,7 @@ class Wu(Meld):
         return types
 
     def faan(self, choice: Sequence[Meld],
-              winds: Tuple[int, int] = None) -> Tuple[int, WuFlag]:
+              winds: Optional[Tuple[int, int]] = None) -> Tuple[int, WuFlag]:
         """Number of faan points the Wu is worth.
 
         Parameters
@@ -525,8 +527,8 @@ class Wu(Meld):
         types = self.flags(choice, winds)
         return (faan(types), types)
 
-    def max_faan(self, winds: Tuple[int, int] = None) \
-        -> Tuple[List[Meld], int, WuFlag]:
+    def max_faan(self, winds: Optional[Tuple[int, int]] = None
+                 ) -> Tuple[List[Meld], int, WuFlag]:
         return max(
             ((choice, *self.faan(choice, winds)) for choice in self.melds),
             key=lambda trip: trip[1])
@@ -539,10 +541,11 @@ def faan(flags: WuFlag) -> int:
     return points
 
 class _UncheckedWu(Wu):
-    size = 14
+    size: int = 14
 
     def __init__(
-        self, tiles: Iterable[Tile], melds: Iterable[Meld] = None, *_, **__
+        self, tiles: Iterable[Tile],
+        melds: Optional[Iterable[Meld]] = None, *_, **__
     ):
         """Don't check validity, that's the whole point"""
         self.tiles = tuple(sorted(tiles)) + tuple(

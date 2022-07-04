@@ -47,7 +47,9 @@ while question is not None:
             input('Hit Enter when ready for the next round.')
             question = question.answer()
             continue
-        hand_minus_tile = [tile for tile in question.hand if tile is not question.arrived]
+        assert question.player is not None
+        hand_minus_tile = [tile for tile in question.player.hand
+                           if tile is not question.arrived]
         print('Question for Player #%s' % question.player.seat.value)
         print('Draw/Last discard: %s;' % question.arrived, 'Concealed:',
               ', '.join(map(str, hand_minus_tile)))
@@ -119,7 +121,7 @@ while question is not None:
         if question.result == HandResult.GOULASH:
             print('Goulash! Nobody wins. Starting next game...')
         else:
-            assert question.choice is not None
+            assert question.choice is not None and question.winner is not None
             print('Player #%s won with %s (%s faan; %s points; %s)! Starting next game...' % (
                 question.winner.seat.value, ','.join(map(str, question.choice)),
                 question.faan()[0], *question.points(1)

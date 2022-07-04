@@ -92,8 +92,9 @@ class HandEnding(NamedTuple):
         bonus = self.winner.bonus_faan()
         return (points[0] + bonus[0], points[1] | bonus[1])
 
-    def points(self, min_faan: int = 3, table: Mapping[int, int] = None) \
-            -> Tuple[List[int], Optional[WuFlag]]:
+    def points(self, min_faan: int = 3,
+               table: Optional[Mapping[int, int]] = None
+               ) -> Tuple[List[int], Optional[WuFlag]]:
         """Calculate the change in points for each player.
 
         Parameters
@@ -112,7 +113,7 @@ class HandEnding(NamedTuple):
             and the latter is None, on goulash or not enough faan.
         """
         points = [0, 0, 0, 0]
-        if self.winner is None:
+        if self.winner is None or self.wu is None or self.choice is None:
             return (points, None)
         faan, flags = self.faan()
         if faan < min_faan:
@@ -123,11 +124,12 @@ class HandEnding(NamedTuple):
             table = STOCK_TABLES['random_app']
         limit = max(table.keys())
         base = table[min(faan, limit)]
+        flags = wu.flags(self.choice)
         # special penalties that make the perpetrator pay
         # for everyone else on top of themselves
-        if ((WuFlag.TWELVE_PIECE in wu.flags and WuFlag.SELF_DRAW in wu.flags)
-            or (WuFlag.GAVE_KONG in wu.flags and WuFlag.SELF_DRAW in wu.flags)
-            or WuFlag.GAVE_DRAGON in wu.flags) and wu.discarder is not None:
+        if ((WuFlag.TWELVE_PIECE in flags and WuFlag.SELF_DRAW in flags)
+            or (WuFlag.GAVE_KONG in flags and WuFlag.SELF_DRAW in flags)
+            or WuFlag.GAVE_DRAGON in flags) and wu.discarder is not None:
             points[winner.seat] += base * 3
             points[wu.discarder] -= base * 3
         # loser pays double in normal losing conditions
@@ -135,7 +137,7 @@ class HandEnding(NamedTuple):
             points[winner.seat] += base * 2
             points[wu.discarder] -= base * 2
         # self draw means everyone pays
-        elif WuFlag.SELF_DRAW in wu.flags:
+        elif WuFlag.SELF_DRAW in flags:
             for i in range(4):
                 if i == winner.seat:
                     points[i] += base * 3
@@ -170,6 +172,8 @@ class UserIO(NamedTuple):
     @property
     def hand(self) -> List[Tile]:
         """Shortcut to .player.hand"""
+        if self.player is None:
+            raise AttributeError
         return self.player.hand
 
     @property
@@ -189,6 +193,8 @@ class UserIO(NamedTuple):
     @property
     def shown(self) -> List[Meld]:
         """Shortcut to .player.shown"""
+        if self.player is None:
+            raise AttributeError
         return self.player.shown
 
     def answer(self, ans=None):
@@ -288,7 +294,7 @@ class Hand:
     _gave_kong: Dict[Player, Player]
 
     @overload
-    def __init__(self, round: Round):
+    def __init__(self, round_or_players: Round):
         """Setup a hand.
 
         Pass the :class:`Round`_ explicitly if you have control over Round
@@ -299,7 +305,7 @@ class Hand:
         """
 
     @overload
-    def __init__(self, players: List[Player]):
+    def __init__(self, round_or_players: List[Player]):
         """Setup a hand.
 
         Pass ``[p1, p2, p3, p4]`` if you want more control over how hands
@@ -307,7 +313,7 @@ class Hand:
         """
 
     @overload
-    def __init__(self, standalone: None):
+    def __init__(self, round_or_players: None):
         """Setup a hand.
 
         Pass ``None`` if this hand is intended to be played standalone.
@@ -366,7 +372,8 @@ class Hand:
             self.turncount += 1
         self.ending = ending
         # Step 15
-        if ending.winner is None: # implies and not self.wall
+        # implies and not self.wall
+        if ending.winner is None or ending.wu is None:
             # tie
             return HandEnding(HandResult.GOULASH, self)
         if len(self.wall) <= 0:
@@ -374,7 +381,7 @@ class Hand:
         if ending.winner in self._gave_dragon:
             ending.wu.base_flags |= WuFlag.GAVE_DRAGON
             ending.wu.discarder = self._gave_dragon[ending.winner].seat
-        if WuFlag.SELF_DRAW in ending.wu.flags \
+        if WuFlag.SELF_DRAW in ending.wu.base_flags \
                 and ending.winner in self._12_piece:
             ending.wu.base_flags |= WuFlag.TWELVE_PIECE
             ending.wu.discarder = self._12_piece[ending.winner].seat
@@ -437,7 +444,7 @@ class Turn:
         if last_ending.seat is None:
             raise ValueError('Must have valid seat')
         player = self.players[last_ending.seat]
-        meld: Optional[Meld] = None
+        meld: Union[Meld, bool, None] = None
         if last_ending.jumped_with is not None \
                 and last_ending.discard is not None \
                 and last_ending.prev_seat is not None:
@@ -456,8 +463,7 @@ class Turn:
             del old_count, old_drag
         elif last_ending.discard is not None and not last_ending.offered:
             # Step 16
-            meld: Optional[Meld] = (yield from self.melds_from_discard(
-                player, last_ending))
+            meld = (yield from self.melds_from_discard(player, last_ending))
         if isinstance(meld, Wu):
             if turncount == 1:
                 meld.base_flags |= WuFlag.EARTHLY
@@ -523,7 +529,8 @@ class Turn:
         self.hand.discarders.append(player)
         # Step 29
         thief, meld = (yield from self.check_others_melds(answer, player))
-        if thief is None and isinstance(meld, bool):
+        if thief is None or isinstance(meld, bool):
+            assert isinstance(meld, bool)
             # Step 14
             return TurnEnding(
                 discard=answer, offered=meld,
