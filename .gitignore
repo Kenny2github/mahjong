@@ -6,3 +6,4 @@ dist/
 pyrightconfig.json
 .pylint*
 .vscode
+docs/_build/
