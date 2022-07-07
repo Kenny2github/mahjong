@@ -225,9 +225,7 @@ class Meld:
     def check_size(self) -> None:
         """Check that the meld is the right size."""
         if isinstance(self.size, range) and isinstance(self, Wu):
-            size = len(self.tiles + tuple(
-                tile for meld in self.fixed_melds
-                for tile in meld.tiles))
+            size = len(self.all_tiles)
             if size not in self.size:
                 start, stop = self.size.start, self.size.stop
                 raise ValueError(f'{_tname(self)} must be '
