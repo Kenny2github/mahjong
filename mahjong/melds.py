@@ -379,8 +379,24 @@ class Wu(Meld):
             possible = self.all_melds_pos(ts)
             combos = combinations(possible, 4 - len(self.fixed_melds))
             for combo in combos:
-                covered = {i for meld, idxs in combo for i in idxs}
-                if len(covered) != len_ts:
+                # Try to find two melds using the same index.
+                # The naive way I was previously using was to
+                # slam all the indexes into a set and check its length.
+                # However, when we're dealing with over a million combos,
+                # that gets expensive. Instead, manually loop until we
+                # find a single duplicate, at which point we skip immediately.
+                covered = set()
+                found_dupe = False
+                for _, idxs in combo:
+                    for i in idxs:
+                        if i in covered:
+                            found_dupe = True
+                            break
+                        covered.add(i)
+                    if found_dupe:
+                        break
+                if found_dupe:
+                    # can't have duplicate indexes, skip this combo
                     continue
                 covered = [tile for meld, idxs in combo for tile in meld.tiles]
                 if len(covered) != len_ts:
