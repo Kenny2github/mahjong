@@ -620,10 +620,15 @@ class _UncheckedWu(Wu):
         self.fixed_melds = []
 
 if 0:
-    # TODO: figure out why one particular one takes multiple seconds:
+    # NOTE: An example of the non-atomicity of Wu() is the following:
     # 1.25s (3.94s when debug): tong/1|tong/1|tong/1|tong/2|tong/2|tong/2|tong/3|tong/3|tong/3|tong/4|tong/4|tong/4|tong/5|tong/5
     # Note that fixing even one meld reduces it to atomic:
     # 0.02s: tong/1|tong/1|tong/1 + tong/2|tong/2|tong/2|tong/3|tong/3|tong/3|tong/4|tong/4|tong/4|tong/5|tong/5
+    # This happens because there's no way around the fact that:
+    # 1. There are 5 ways to make eyes (a pair of 1s, 2s, 3s, 4s, or 5s)
+    # 2. For each of those choices of eyes, there are 58, 45, 27, 39, and 57 different ways to form melds
+    # 3. We have to check the validity of every choice of 4 melds out of those numerous ways, since no melds are fixed
+    # 4. 58C4 + 45C4 + 27C4 + 39C4 + 57C4 = 1,068,076 which is enough to make a real difference in Python
     # Other timing tests follow
     # 0.00s: tong/1|tong/9|zhu/1|zhu/9|wan/1|wan/9|feng/1|feng/2|feng/3|feng/4|long/1|long/2|long/3|wan/2
     # 0.08s: wan/1|wan/1|wan/1|wan/2|wan/3|wan/4|wan/4|wan/5|wan/6|wan/7|wan/8|wan/9|wan/9|wan/9
