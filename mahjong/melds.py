@@ -426,7 +426,8 @@ class Wu(Meld):
             pass
         return None
 
-    def all_melds_pos(self, ts) -> List[Tuple[Meld, Tuple[int, int, int]]]:
+    def all_melds_pos(self, ts: List[Tile]
+                      ) -> List[Tuple[Meld, Tuple[int, int, int]]]:
         """Get every possible meld and the indexes of their component cards.
         Modified from
         https://github.com/offe/py-mcr/blob/master/mahjonggrouping.py#L108-L121
@@ -454,7 +455,7 @@ class Wu(Meld):
         return sorted((i, j) for j, i in trips.items())
 
     def flags(self, choice: Sequence[Meld],
-             winds: Optional[Tuple[int, int]] = None) -> WuFlag:
+              winds: Optional[Tuple[int, int]] = None) -> WuFlag:
         """WuFlags that apply to this choice of winning hand."""
         all_tiles = self.all_tiles
         types = self.base_flags
