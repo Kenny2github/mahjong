@@ -398,9 +398,14 @@ class Wu(Meld):
                 if found_dupe:
                     # can't have duplicate indexes, skip this combo
                     continue
-                covered = [tile for meld, idxs in combo for tile in meld.tiles]
-                if len(covered) != len_ts:
-                    continue
+                # NOTE: Removed a check that used to be here that was to
+                # ensure all tiles are used; in a Wu with enough tiles for
+                # Kongs, a choice of four Pongs would not use all tiles.
+                # However, in real gameplay, there is no way to construct
+                # a Kong from your HIDDEN tiles and have it still be a winning
+                # hand (you would have to draw again, so the actual Wu would
+                # be constructed with an EXPOSED Kong), so the check is not
+                # necessary and we save 12 operations per iteration.
                 melds = [meld for meld, idxs in combo] + list(self.fixed_melds)
                 melds.append(test_eyes)
                 yield melds
@@ -438,23 +443,12 @@ class Wu(Meld):
                 continue
             trip = [ts[i] for i in trip_idxs]
             meld = self.get_triplet(trip)
-            if isinstance(meld, Pong) and t3 < tc - 1:
-                old_idxs = trip_idxs
-                old_meld = meld
-                for t4 in range(t3 + 1, tc):
-                    trip_idxs = tuple(sorted((t1, t2, t3, t4)))
-                    if trip_idxs in trips or len(set(trip_idxs)) != 4:
-                        continue
-                    trip = [ts[i] for i in trip_idxs]
-                    try:
-                        meld = Kong(trip)
-                    except ValueError:
-                        continue
-                    else:
-                        break
-                else:
-                    trip_idxs = old_idxs
-                    meld = old_meld
+            # Removed an attempt to construct a Kong:
+            # in real gameplay, there is no way to construct
+            # a Kong from your HIDDEN tiles and have it still be a winning
+            # hand (you would have to draw again, so the actual Wu would
+            # be constructed with an EXPOSED Kong).
+            # Thus the Kong would already be constructed; don't do so here.
             if meld:
                 trips[trip_idxs] = meld
         return sorted((i, j) for j, i in trips.items())
@@ -649,7 +643,7 @@ if 0:
     # 0.00s: tong/1|tong/9|zhu/1|zhu/9|wan/1|wan/9|feng/1|feng/2|feng/3|feng/4|long/1|long/2|long/3|wan/2
     # 0.08s: wan/1|wan/1|wan/1|wan/2|wan/3|wan/4|wan/4|wan/5|wan/6|wan/7|wan/8|wan/9|wan/9|wan/9
     # 0.18s: tong/1|tong/2|tong/3|tong/2|tong/3|tong/4|tong/5|tong/6|tong/7|tong/8|tong/8|tong/8|tong/4|tong/4
-    # 0.32s: feng/1|feng/1|feng/1|feng/1|feng/2|feng/2|feng/2|feng/2|feng/3|feng/3|feng/3|feng/3|feng/4|feng/4|feng/4|feng/4|long/1|long/1
+    # 0.32s (no longer supported): feng/1|feng/1|feng/1|feng/1|feng/2|feng/2|feng/2|feng/2|feng/3|feng/3|feng/3|feng/3|feng/4|feng/4|feng/4|feng/4|long/1|long/1
     # 0.17s: tong/1|tong/1|tong/1|wan/9|wan/9|wan/9|zhu/5|zhu/5|zhu/5|tong/2|tong/2|tong/2|long/1|long/1
     # 0.00s: zhu/3|zhu/4|zhu/5,zhu/5|zhu/6|zhu/7,zhu/7|zhu/8|zhu/9 + feng/3|feng/3|zhu/4|zhu/5|zhu/6
     # 0.55s: wan/2|wan/2|wan/2|tong/1|tong/1|tong/1|tong/1|tong/2|tong/3|tong/2|tong/2|tong/2|tong/3|tong/3
