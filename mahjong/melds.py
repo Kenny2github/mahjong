@@ -229,11 +229,14 @@ class Meld:
                 tile for meld in self.fixed_melds
                 for tile in meld.tiles))
             if size not in self.size:
+                start, stop = self.size.start, self.size.stop
                 raise ValueError(f'{_tname(self)} must be '
-                                 f'[{self.size.start},{self.size.stop}) tiles')
+                                 f'[{start},{stop}) tiles, '
+                                 f'you have {len(self.tiles)}: {self.tiles}')
         else:
             if len(self.tiles) != self.size:
-                raise ValueError(f'{_tname(self)} must be {self.size} tiles')
+                raise ValueError(f'{_tname(self)} must be {self.size} tiles, '
+                                 f'you have {len(self.tiles)}: {self.tiles}')
 
     def check_suit(self) -> None:
         """Check that all tiles are the same suit."""
