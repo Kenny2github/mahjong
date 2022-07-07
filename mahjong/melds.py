@@ -353,14 +353,15 @@ class Wu(Meld):
         super().check_meld()
         # sort each combo of melds, to make out-of-order duplicates
         # equal, then pass them through a set to weed them out
-        self.melds = list(map(list, set(
-            tuple(sorted(combo)) for combo in self.valid_combos())))
+        self.melds = list(map(list, {
+            tuple(sorted(combo)) for combo in self.valid_combos()}))
         if not self.melds:
             raise ValueError('No valid combos')
 
     def valid_combos(self) -> Iterator[List[Meld]]:
         """Yield all possible winning sets of melds."""
         tc = len(self.tiles)
+        len_ts = tc - 2 # tile count minus eyes
         checked = set()
         for e1, e2 in combinations(range(tc), 2):
             if e1 == e2:
@@ -378,17 +379,16 @@ class Wu(Meld):
             combos = combinations(possible, 4 - len(self.fixed_melds))
             for combo in combos:
                 covered = {i for meld, idxs in combo for i in idxs}
-                if len(covered) != len(ts):
+                if len(covered) != len_ts:
                     continue
                 covered = [tile for meld, idxs in combo for tile in meld.tiles]
-                if len(covered) != len(ts):
+                if len(covered) != len_ts:
                     continue
                 melds = [meld for meld, idxs in combo] + list(self.fixed_melds)
                 melds.append(test_eyes)
                 yield melds
         if set(self.tiles) == THIRTEEN_ORPHANS:
-            melds: List[Meld] = []
-            melds.append(_UncheckedWu(self.tiles))
+            melds: List[Meld] = [_UncheckedWu(self.tiles)]
             yield melds
 
     @staticmethod
