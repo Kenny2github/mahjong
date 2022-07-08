@@ -1,12 +1,12 @@
 """
 Mahjong
--------
+=======
 
 Abstract away the logic of Mahjong games (for oh, it is complicated!)
 Only worry about the representation.
 
 Example Usage
-=============
+-------------
 
 .. code-block:: python
 
@@ -23,60 +23,20 @@ https://github.com/Kenny2github/mahjong/wiki
 __version__ = "2.0.0rc3"
 
 __all__ = [
-    'STOCK_TABLES',
-    'HandEnding',
-    'Question',
-    'UserIO',
-    'DiscardWhat',
-    'MeldFromDiscardQ',
-    'ReadyQ',
-    'RobKongQ',
-    'SelfDrawQ',
-    'ShowEKFCP',
-    'ShowEKFEP',
-    'WhichWu',
-    'NormalHandEnding',
-    'Goulash',
-    'DealerWon',
-    'HandResult',
-
-    'TurnEnding',
     'Game',
-    'Round',
     'Hand',
-    'Turn',
 
-    'Suit',
-    'Simples',
-    'Honors',
-    'Bonuses',
-    'Misc',
-    'Wind',
-    'Dragon',
-    'Flower',
-    'Season',
-    'ORDER',
-    'Number',
-
-    'Tile',
-    'BonusTile',
-
-    'WuFlag',
-    'THIRTEEN_ORPHANS',
-    'FLAG_FAAN',
-    'Meld',
-    'Pong',
-    'Kong',
-    'Chow',
-    'Eyes',
-    'Wu',
-    'faan',
-
-    'Player',
+    'players',
+    'melds',
+    'tiles',
+    'game',
+    'qna',
 ]
 
-from .players import *
-from .melds import *
-from .tiles import *
-from .game import *
-from .qna import *
+from . import players
+from . import melds
+from . import tiles
+from . import game
+from . import qna
+
+from .game import Game, Hand
