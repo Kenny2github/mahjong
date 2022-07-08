@@ -10,13 +10,7 @@ from .melds import Chow, Kong, Meld, Pong, Wu, WuFlag
 from .players import Player
 from . import qna
 
-# This is a really big file, but there's no way around it:
-# All of the classes depend on each other, so there's
-# a lot of circular imports if they are in different files.
-
 __all__ = [
-    'TurnEnding',
-
     'Game',
     'Round',
     'Hand',
