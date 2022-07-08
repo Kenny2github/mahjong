@@ -1,6 +1,7 @@
 """All game-process-related classes."""
 from __future__ import annotations
-from typing import List, Mapping, NamedTuple, Optional, \
+from dataclasses import dataclass
+from typing import List, Mapping, Optional, \
     Tuple, Union, Dict, overload
 from itertools import combinations
 import random
@@ -24,14 +25,35 @@ __all__ = [
 
 # data classes
 
-class TurnEnding(NamedTuple):
-    winner: Optional[Player] = None
-    discard: Optional[Tile] = None
-    seat: Optional[Wind] = None
-    wu: Optional[Wu] = None
-    jumped_with: Optional[Meld] = None
+class TurnEnding:
+    pass
+
+@dataclass
+class HandStart(TurnEnding):
+    seat: Wind
+
+@dataclass
+class TurnNext(TurnEnding):
+    discard: Tile
+    seat: Wind
+    prev_seat: Wind
+
+@dataclass
+class NextSeat(TurnNext):
     offered: bool = False
-    prev_seat: Optional[Wind] = None
+
+@dataclass
+class JumpSeat(TurnNext):
+    jumped_with: Meld
+
+@dataclass
+class TurnTied(TurnEnding):
+    pass
+
+@dataclass
+class TurnWon(TurnEnding):
+    winner: Player
+    wu: Wu
 
 # game process classes
 
@@ -186,19 +208,19 @@ class Hand:
         self.shuffle() # Step 08
         self.deal() # Step 09
         # Sets up Step 12
-        ending: TurnEnding = TurnEnding(seat=self.wind)
+        ending: TurnEnding = HandStart(seat=self.wind)
         self.turncount = 0
-        while ending.winner is None and self.wall:
+        while not isinstance(ending, (TurnTied, TurnWon)) and self.wall:
             self.turn = Turn(self)
             # Step 13
             ending = (yield from self.turn.execute(ending, self.turncount))
             self.turncount += 1
         self.ending = ending
         # Step 15
-        # implies and not self.wall
-        if ending.winner is None or ending.wu is None:
+        if isinstance(ending, TurnTied) or not self.wall:
             # tie
             return qna.Goulash(hand=self)
+        assert isinstance(ending, TurnWon)
         if len(self.wall) <= 0:
             ending.wu.base_flags |= WuFlag.LAST_CATCH
         if ending.winner in self._gave_dragon:
@@ -210,7 +232,7 @@ class Hand:
             ending.wu.discarder = self._12_piece[ending.winner].seat
         if len(ending.wu.melds) > 1:
             question = qna.WhichWu(gen=self.gen, melds=ending.wu.melds)
-            answer = (yield question)
+            answer: List[Meld] = (yield question)
         else:
             answer = ending.wu.melds[0]
         if ending.winner is self.players[self.wind]:
@@ -261,14 +283,12 @@ class Turn:
         self.players = self.hand.players
         self.gen = self.hand.gen
 
-    def execute(self, last_ending: TurnEnding, turncount: int):
+    def execute(self, last_ending: Union[HandStart, TurnNext], turncount: int):
         if last_ending.seat is None:
             raise ValueError('Must have valid seat')
         player = self.players[last_ending.seat]
         meld: Union[Meld, bool, None] = None
-        if last_ending.jumped_with is not None \
-                and last_ending.discard is not None \
-                and last_ending.prev_seat is not None:
+        if isinstance(last_ending, JumpSeat):
             meld = last_ending.jumped_with
             self.hand.discarded.pop() # Step 18
             self.hand.discarders.pop()
@@ -282,19 +302,19 @@ class Turn:
                 self.hand._gave_dragon[player] = self.players[
                     last_ending.prev_seat]
             del old_count, old_drag
-        elif last_ending.discard is not None and not last_ending.offered:
+        elif isinstance(last_ending, NextSeat) and not last_ending.offered:
             # Step 16
             meld = (yield from self.melds_from_discard(player, last_ending))
         if isinstance(meld, Wu):
             if turncount == 1:
                 meld.base_flags |= WuFlag.EARTHLY
-            return TurnEnding(winner=player, wu=meld)
+            return TurnWon(winner=player, wu=meld)
         if isinstance(meld, Kong):
             wu, winner = (yield from self.check_kong_robbers(meld, player))
-            if wu is not None:
-                return TurnEnding(winner=winner, wu=wu)
+            if wu is not None and winner is not None:
+                return TurnWon(winner=winner, wu=wu)
+        arrived = None
         if isinstance(meld, Kong) or meld is None:
-            arrived = None
             kong: Optional[Kong] = None
             tries = 0
             wu, winner = None, None
@@ -302,7 +322,7 @@ class Turn:
                 try:
                     drawn = player.draw(self.hand.wall) # Step 20
                 except IndexError: # goulash time
-                    return TurnEnding()
+                    return TurnTied()
                 try:
                     flags = WuFlag.SELF_DRAW
                     if tries == 0 and turncount == 0:
@@ -325,7 +345,7 @@ class Turn:
                                              arrived=drawn, melds=[wu])
                     ans: bool = (yield question)
                     if ans:
-                        return TurnEnding(winner=player, wu=wu)
+                        return TurnWon(winner=player, wu=wu)
                     del ans
                 arrived = drawn
                 kong = (yield from self.check_ekfp(drawn, player))
@@ -334,11 +354,11 @@ class Turn:
                     break
                 player.shown.append(kong)
                 wu, winner = (yield from self.check_kong_robbers(kong, player))
-                if wu is not None:
-                    return TurnEnding(winner=winner, wu=wu)
+                if wu is not None and winner is not None:
+                    return TurnWon(winner=winner, wu=wu)
                 tries += 1
             del tries, flags, kong, wu, winner
-        else:
+        elif isinstance(last_ending, TurnNext):
             arrived = last_ending.discard
         player.hand.sort() # Step 26
         assert arrived is not None
@@ -354,14 +374,14 @@ class Turn:
         if thief is None or isinstance(meld, bool):
             assert isinstance(meld, bool)
             # Step 14
-            return TurnEnding(
+            return NextSeat(
                 discard=answer, offered=meld,
                 seat=Wind((player.seat + 1) % 4), prev_seat=player.seat)
         # Step 31
         if isinstance(meld, Wu):
-            return TurnEnding(winner=thief, wu=meld)
-        return TurnEnding(discard=answer, seat=thief.seat,
-                          jumped_with=meld, prev_seat=player.seat)
+            return TurnWon(winner=thief, wu=meld)
+        return JumpSeat(discard=answer, seat=thief.seat,
+                        jumped_with=meld, prev_seat=player.seat)
 
     @staticmethod
     def all_dragons(player: Player) -> bool:
@@ -371,7 +391,7 @@ class Turn:
                 dragons[m.tiles[0].number] = True
         return all(dragons)
 
-    def melds_from_discard(self, player: Player, last_ending: TurnEnding):
+    def melds_from_discard(self, player: Player, last_ending: TurnNext):
         """Check for possible melds to make from the discard tile."""
         if last_ending.discard is None:
             return None
