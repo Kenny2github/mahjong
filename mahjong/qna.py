@@ -9,6 +9,32 @@ if TYPE_CHECKING:
     from .players import Player
     from .tiles import Tile
 
+__all__ = [
+    'Question',
+    'UserIO',
+    'PlayeredIO',
+    'ArrivedIO',
+    'DiscardWhat',
+    'MeldFromDiscardQ',
+    'ReadyQ',
+    'RobKongQ',
+    'SelfDrawQ',
+    'ShowEKFCP',
+    'ShowEKFEP',
+    'WhichWu',
+    'UserIOType',
+
+    'STOCK_TABLES',
+    'HandResult',
+    'HandEnding',
+    'NormalHandEnding',
+    'Goulash',
+    'DealerWon',
+    'HandEndingType',
+
+    'YieldType',
+]
+
 def _answer(gen: Generator, ans=None) -> YieldType:
     """Send the answer to the internal generator."""
     try:
@@ -247,8 +273,7 @@ class ShowEKFCP(ArrivedIO):
 class ShowEKFEP(ShowEKFCP):
     """Same deal as :class:`ShowEKFCP` but exposed Pong instead.
 
-    .. warning::
-
+    Warning:
         This inherits from :class:`ShowEKFCP`, so call :func:`isinstance`
         on this class **first**, before the other one.
     """
@@ -465,8 +490,7 @@ class DealerWon(NormalHandEnding):
 
     Same attributes as :class:`NormalHandEnding`.
 
-    .. warning::
-
+    Warning:
         This inherits from :class:`NormalHandEnding`, so call
         :func:`isinstance` on this class **first**, before the other one.
     """

@@ -167,10 +167,19 @@ FLAG_FAAN = {
 def _tname(obj) -> str:
     return type(obj).__name__
 
-T = TypeVar('T', bound='Meld')
+Self = TypeVar('Self', bound='Meld')
 
 class Meld:
-    """Represents a meld of tiles."""
+    """Represents a meld of tiles.
+
+    Validity of the meld is checked upon initialization.
+
+    Args:
+        tiles: The tiles in this meld.
+
+    Attributes:
+        tiles: See Args.
+    """
 
     @property
     def size(self) -> Union[int, range]:
@@ -180,12 +189,11 @@ class Meld:
     tiles: Tuple[Tile, ...]
 
     def __init__(self, tiles: Iterable[Tile]):
-        """Check validity upon initialization."""
         self.tiles = tuple(sorted(tiles))
         self.check_meld()
 
     @classmethod
-    def from_str(cls: Type[T], s: str) -> T:
+    def from_str(cls: Type[Self], s: str) -> Self:
         """Meld.from_str('suit1/num1|...') -> Meld"""
         return cls(map(Tile.from_str, s.split('|')))
 
@@ -306,12 +314,28 @@ class Eyes(_SameNum):
 class Wu(Meld):
     """Represents a winning hand. This can only consist of sub-melds.
 
-    .. warning::
-
+    Warning:
         For some hands, instantiating this class is NOT atomic.
         So far I have discovered hands that take a full second or two.
         Consider instantiating this class a blocking procedure, and
         treat it as such, e.g. in asynchronous contexts.
+
+    Args:
+        tiles: Hidden tiles in the winning hand.
+        melds: Shown melds in the winning hand.
+        arrived: The discarded or drawn tile that allowed this hand.
+            :obj:`None` if unknown.
+        discarder: The seat wind that discarded the tile.
+            :obj:`None` if unknown or the tile was drawn.
+        flags: Flags known at initialization.
+
+    Attributes:
+        tiles: See ``tiles`` argument.
+        melds: Possible choices for ways to arrange the hidden melds.
+        fixed_melds: See ``melds`` argument.
+        arrived: See ``arrived`` argument.
+        discarder: See ``discarder`` argument.
+        base_flags: Flags common to all choices of meld.
     """
 
     size: range = range(14, 19) # [14, 18]
@@ -323,6 +347,7 @@ class Wu(Meld):
 
     @property
     def all_tiles(self) -> List[Tile]:
+        """All tiles in the hand, including hidden and exposed."""
         tiles = list(self.tiles)
         for meld in self.fixed_melds:
             tiles.extend(meld.tiles)
@@ -334,7 +359,6 @@ class Wu(Meld):
                  arrived: Optional[Tile] = None,
                  discarder: Optional[int] = None,
                  flags: WuFlag = WuFlag.CHICKEN_HAND):
-        """Check validity upon initialization."""
         self.tiles = tuple(sorted(tiles))
         self.fixed_melds = list(melds or [])
         self.arrived = arrived
@@ -349,7 +373,8 @@ class Wu(Meld):
 
     def check_meld(self) -> None:
         """Check that this hand is a winning hand.
-        Returns all possible winning combinations.
+
+        Generates all possible winning combinations.
         """
         super().check_meld()
         # sort each combo of melds, to make out-of-order duplicates
@@ -362,7 +387,6 @@ class Wu(Meld):
     def valid_combos(self) -> Iterator[List[Meld]]:
         """Yield all possible winning sets of melds."""
         tc = len(self.tiles)
-        len_ts = tc - 2 # tile count minus eyes
         checked = set()
         for e1, e2 in combinations(range(tc), 2):
             if e1 == e2:
@@ -415,7 +439,14 @@ class Wu(Meld):
 
     @staticmethod
     def get_triplet(trip: List[Tile]) -> Union[Meld, None]:
-        """Try to get a meld."""
+        """Try to get a meld.
+
+        Args:
+            trip: A list of three tiles to try.
+
+        Returns:
+            A meld, if possible; :obj:`None`, if not.
+        """
         try:
             return Pong(trip)
         except ValueError:
@@ -428,7 +459,7 @@ class Wu(Meld):
 
     def all_melds_pos(self, ts: List[Tile]
                       ) -> List[Tuple[Meld, Tuple[int, int, int]]]:
-        """Get every possible meld and the indexes of their component cards.
+        """Get every possible meld and the indexes of their component tiles.
         Modified from
         https://github.com/offe/py-mcr/blob/master/mahjonggrouping.py#L108-L121
         """
@@ -456,7 +487,15 @@ class Wu(Meld):
 
     def flags(self, choice: Sequence[Meld],
               winds: Optional[Tuple[int, int]] = None) -> WuFlag:
-        """WuFlags that apply to this choice of winning hand."""
+        """Get WuFlags that apply to this choice of winning hand.
+
+        Args:
+            choice: Which combination of melds from the possible
+                set to calculate the flags for.
+            winds: If specified as ``(seat, prevailing)``, this provides the
+                necessary context to include :attr:`WuFlag.SEAT_WIND` and
+                :attr:`WuFlag.PREVAILING_WIND`.
+        """
         all_tiles = self.all_tiles
         types = self.base_flags
         if all(isinstance(meld, (Chow, Eyes)) for meld in choice):
@@ -595,8 +634,8 @@ class Wu(Meld):
             choice: Which combination of melds from the possible
                 set to calculate the points for.
             winds: If specified as ``(seat, prevailing)``, this provides the
-                necessary context to include the Seat Wind and Prevailing Wind
-                Wu flags.
+                necessary context to include :attr:`WuFlag.SEAT_WIND` and
+                :attr:`WuFlag.PREVAILING_WIND`.
 
         Returns:
             ``(points, flags)`` - flags represents all of the features of a Wu
@@ -607,11 +646,19 @@ class Wu(Meld):
 
     def max_faan(self, winds: Optional[Tuple[int, int]] = None
                  ) -> Tuple[List[Meld], int, WuFlag]:
+        """Find the best choice by faan.
+
+        Args:
+            winds: If specified as ``(seat, prevailing)``, this provides the
+                necessary context to consider :attr:`WuFlag.SEAT_WIND` and
+                :attr:`WuFlag.PREVAILING_WIND`.
+        """
         return max(
             ((choice, *self.faan(choice, winds)) for choice in self.melds),
             key=lambda trip: trip[1])
 
 def faan(flags: WuFlag) -> int:
+    """Get faan based on flags."""
     points = 0
     for flag in WuFlag:
         if flag in flags:

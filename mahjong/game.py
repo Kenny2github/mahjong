@@ -52,10 +52,19 @@ class TurnWon(TurnEnding):
 # game process classes
 
 class Game:
-    """Represents an entire game (consisting of 4 Rounds)."""
+    """Represents an entire game (consisting of 4 Rounds).
+
+    Currently supported house rules are described below.
+
+    Args:
+        extra_hands: If :obj:`True` (the default), ties and dealer wins
+            cause an extra hand to be played with no seat rotation.
+    """
 
     round: Round
     players: List[Player]
+
+    extra_hands: bool
 
     def __init__(self, **house_rules):
         self.init_players()
@@ -65,7 +74,9 @@ class Game:
         """Play the game!
 
         Starts and stores a generator.
-        Returns the first request for user input.
+
+        Returns:
+            The first question.
         """
         if hasattr(self, 'gen'):
             raise RuntimeError('Game already started!')
@@ -74,7 +85,11 @@ class Game:
         return question
 
     def execute(self):
-        """Generator-coroutine-based interface to play the game."""
+        """Generator-coroutine-based interface to play the game.
+
+        Yields:
+            Questions to ask the player.
+        """
         for i in range(4): # Step 01, 03
             self.round = Round(self)
             yield from self.round.execute(i) # Step 02
@@ -85,7 +100,16 @@ class Game:
         self.players = [Player(i) for i in range(4)]
 
 class Round:
-    """Represents one four(+)-hand round of Mahjong."""
+    """Represents one four(+)-hand round of Mahjong.
+
+    Args:
+        game: The :class:`Game` that this round belongs to.
+
+    Attributes:
+        hand: The hand currently being played.
+        game: See Args.
+        wind: The seat of the current dealer.
+    """
 
     hand: Hand
     game: Game
@@ -95,7 +119,11 @@ class Round:
         self.game = game
 
     def execute(self, wind: int):
-        """Play at least four hands."""
+        """Play at least four hands.
+
+        Args:
+            wind: The dealer's seat.
+        """
         self.wind = Wind(wind)
         i = int(self.wind)
         j = 0
@@ -113,7 +141,33 @@ class Round:
             yield result
 
 class Hand:
-    """Represents one full hand of Mahjong."""
+    """Represents one full hand of Mahjong.
+
+    Normally you do not instantiate this class yourself. If you do, see below:
+
+    Pass the :class:`Round` explicitly if you have control over :class:`Round`
+    machinery *and* :class:`Game` machinery (it will reach into the round's
+    :attr:`~Round.game` attribute to get the game's players).
+
+    Pass ``[player1, player2, player3, player4]`` if you want more control
+    over how hands are played and have control over the players list.
+
+    Pass :obj:`None` if this hand is intended to be played standalone.
+    The players will be initialized automagically.
+
+    Args:
+        round_or_players: See above.
+
+    Attributes:
+        wind: The prevailing wind for this hand.
+        turn: The currently executing turn.
+        round: The round this hand belongs to. :obj:`None` if standalone.
+        wall: The tiles remaining in the wall.
+        discarded: The discarded tiles, in chronological order.
+        discarders: The players who discarded the tiles, likewise.
+        ending: The ending of the last turn in the hand.
+        turncount: How many turns have passed.
+    """
 
     wind: Wind
     turn: Turn
@@ -132,34 +186,15 @@ class Hand:
     _gave_kong: Dict[Player, Player]
 
     @overload
-    def __init__(self, round_or_players: Round):
-        """Setup a hand.
-
-        Pass the :class:`Round`_ explicitly if you have control over Round
-        machinery *and* Game machinery (it will reach into the round's game
-        attribute to get the game's players).
-
-        Otherwise, this is the default invocation by the Round machinery.
-        """
+    def __init__(self, round_or_players: Round): ...
 
     @overload
-    def __init__(self, round_or_players: List[Player]):
-        """Setup a hand.
-
-        Pass ``[p1, p2, p3, p4]`` if you want more control over how hands
-        are played and have control over the players list.
-        """
+    def __init__(self, round_or_players: List[Player]): ...
 
     @overload
-    def __init__(self, round_or_players: None):
-        """Setup a hand.
-
-        Pass ``None`` if this hand is intended to be played standalone.
-        The players will be initialized automagically.
-        """
+    def __init__(self, round_or_players: None): ...
 
     def __init__(self, round_or_players: Union[Round, List[Player], None]):
-        """Setup a hand."""
         if isinstance(round_or_players, Round):
             self.round = round_or_players
             self.players = self.round.game.players
@@ -177,10 +212,13 @@ class Hand:
              ) -> Union[qna.UserIOType, qna.HandEndingType]:
         """Play the hand standalone.
 
-        ``wind``: The prevailing wind for this hand.
-
         Starts and stores a generator.
-        Returns the first request for user input.
+
+        Args:
+            wind: The prevailing wind for this hand.
+
+        Returns:
+            The first question.
         """
         if hasattr(self, 'gen'):
             raise RuntimeError('Game already started!')
@@ -195,7 +233,14 @@ class Hand:
         return question
 
     def execute(self, wind: int):
-        """Play a hand till it ends."""
+        """Play a hand till it ends.
+
+        Args:
+            wind: The prevailing wind for this hand.
+
+        Yields:
+            Questions to ask the player.
+        """
         if not hasattr(self, 'gen') and self.round is not None:
             self.gen = self.round.game.gen
         self.wind = Wind(wind)
@@ -257,6 +302,7 @@ class Hand:
         self.discarders = []
 
     def deal(self):
+        """Deal the initial tiles to the players."""
         players = self.players
         for player in players:
             player.__init__(player.seat)
@@ -268,7 +314,14 @@ class Hand:
             player.hand.sort()
 
 class Turn:
-    """Handles the turn."""
+    """Handles the turn.
+
+    Args:
+        hand: The hand this turn belongs to.
+
+    Attributes:
+        hand: See Args.
+    """
 
     hand: Hand
 
@@ -278,6 +331,13 @@ class Turn:
         self.gen = self.hand.gen
 
     def execute(self, last_ending: Union[HandStart, TurnNext], turncount: int):
+        """Play a turn.
+
+        Args:
+            last_ending: How the last turn ended.
+            turncount: How many turns have passed.
+                Used only to detect Heavenly and Earthly wins.
+        """
         if last_ending.seat is None:
             raise ValueError('Must have valid seat')
         player = self.players[last_ending.seat]
@@ -379,6 +439,11 @@ class Turn:
 
     @staticmethod
     def all_dragons(player: Player) -> bool:
+        """Return whether the player has shown melds of every dragon.
+
+        Args:
+            player: The player to check.
+        """
         dragons = [False, False, False]
         for m in player.shown:
             if m.tiles[0].suit == Honors.LONG:
@@ -386,7 +451,19 @@ class Turn:
         return all(dragons)
 
     def melds_from_discard(self, player: Player, last_ending: TurnNext):
-        """Check for possible melds to make from the discard tile."""
+        """Check for possible melds to make from the discard tile.
+
+        Args:
+            player: The player to make melds for.
+            last_ending: How the last turn ended.
+
+        Asks:
+            * :class:`qna.MeldFromDiscardQ`
+
+        Returns:
+            Optional[Meld]: The meld the player chose to make,
+            or :obj:`None` if the player chose not to meld.
+        """
         if last_ending.discard is None:
             return None
         melds: List[Meld] = []
@@ -421,7 +498,20 @@ class Turn:
         return None
 
     def check_ekfp(self, draw: Tile, player: Player):
-        """Check whether an Exposed Kong From (any) Pong is possible."""
+        """Check whether an Exposed Kong From (any) Pong is possible.
+
+        Args:
+            draw: The recently drawn tile.
+            player: The player to check for.
+
+        Asks:
+            * :class:`qna.ShowEKFCP`
+            * :class:`qna.ShowEKFEP`
+
+        Returns:
+            Optional[Kong]: The :class:`Kong` the player chose to make,
+            or :obj:`None` if the player chose not to meld.
+        """
         kongs: List[Kong] = []
         for quadruplet in combinations(player.hand, 4):
             if all(tile == quadruplet[0] for tile in quadruplet):
@@ -458,7 +548,19 @@ class Turn:
         return None
 
     def check_kong_robbers(self, kong: Kong, victim: Player):
-        """Check for anyone who could potentially rob the Kong for a win."""
+        """Check for anyone who could potentially rob the Kong for a win.
+
+        Args:
+            kong: The Kong to rob.
+            victim: The player being robbed.
+
+        Asks:
+            * :class:`qna.RobKongQ`
+
+        Returns:
+            Union[Tuple[Wu, Player], Tuple[None, None]]: The winning hand and
+            winning player, or :obj:`None` for both if no robbers.
+        """
         tile = kong.tiles[0] # any tile will do
         for p in self.players:
             if p is victim:
@@ -474,7 +576,22 @@ class Turn:
         return (None, None)
 
     def check_others_melds(self, discard: Tile, victim: Player):
-        """Check for anyone who could potentially meld from the discard."""
+        """Check for anyone who could potentially meld from the discard.
+
+        Args:
+            discard: The tile that was discarded.
+            victim: The player who discarded the tile.
+
+        Asks:
+            * :class:`qna.MeldFromDiscardQ`
+
+        Returns:
+            Tuple[Player, Meld]: The player who melded, and the meld they made.
+
+        Returns:
+            Tuple[None, bool]: :obj:`None`, and whether the next player was
+            asked at all whether to meld.
+        """
         overall: Mapping[Player, List[Meld]] = {}
         for player in self.players:
             if player is victim:

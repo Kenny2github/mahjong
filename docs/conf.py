@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'mahjong'
-copyright = '2021, AbyxDev'
+copyright = '2022, AbyxDev'
 author = 'AbyxDev'
 
 # The full version, including alpha/beta/rc tags
@@ -35,6 +35,15 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon',
 ]
+
+autodoc_member_order = 'bysource'
+autodoc_default_options = {
+    'members': True,
+    'inherited-members': True,
+    'show-inheritance': True,
+    'member-order': 'bysource',
+    'exclude-members': '__weakref__',
+}
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
 

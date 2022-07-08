@@ -2,8 +2,11 @@ API Reference
 =============
 
 .. default-domain:: py
+
+.. currentmodule:: mahjong
+
 .. automodule:: mahjong
     :members:
     :inherited-members:
     :show-inheritance:
-    :member-order: bysource
+    :exclude-members: __weakref__
