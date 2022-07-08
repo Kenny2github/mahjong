@@ -15,5 +15,4 @@ Example Usage
     >>> next_question = question.answer(...)
     >>> ...
 
-For full usage see the docs:
-https://github.com/Kenny2github/mahjong/wiki
+For full usage see the docs: https://mahjong.rtfd.io

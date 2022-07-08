@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-mahjong"
+description = "Abstract away the logic of mahjong games."
+readme = "README.rst"
+requires-python = ">=3.7"
+keywords = ["mahjong", "game", "engine"]
+license = {file = "LICENSE.txt"}
+authors = [{name = "Ken Hilton"}]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Games/Entertainment :: Board Games",
+    "Topic :: Games/Entertainment :: Turn Based Strategy",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.7",
+	"Typing :: Typed"
+]
+dependencies = []
+dynamic = ["version"]
+
+[project.optional-dependencies]
+test = [
+	"pytest",
+]
+
+[project.urls]
+Source = "https://github.com/Kenny2github/mahjong"
+Documentation = "https://mahjong.rtfd.io"
+
+[tool.setuptools]
+packages = ["mahjong"]
+
+[tool.setuptools.dynamic]
+version = {attr = "mahjong.__version__"}
+
+[tool.pytest.ini_options]
+addopts = [
+]
