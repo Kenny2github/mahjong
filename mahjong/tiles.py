@@ -177,7 +177,7 @@ class Tile:
 
     def __str__(self) -> str:
         """str(tile) -> 'suit/number'"""
-        return f'{self.suit.value}/{self.number}'
+        return f'{self.suit.value}/{self.number+1}'
 
     __repr__ = __str__
 
