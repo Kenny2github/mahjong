@@ -205,6 +205,8 @@ class BonusTile(Tile):
 
     def __init__(self, suit: Bonuses, number: Union[int, Flower, Season]):
         """Initialize Tile."""
+        if not (0 <= number < 4):
+            raise ValueError(f'Number {number+1} not in range [1, 4]')
         self.suit = suit
         if self.suit == Bonuses.HUA:
             self.number = Flower(number)
