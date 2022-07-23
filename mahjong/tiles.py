@@ -199,6 +199,16 @@ class Tile:
             return False
         return ORDER[self.suit.value] < ORDER[other.suit.value]
 
+    # total ordering
+    def __ne__(self, other: Tile) -> bool:
+        return not (self == other)
+    def __gt__(self, other: Tile) -> bool:
+        return not (self <= other)
+    def __le__(self, other: Tile) -> bool:
+        return self < other or self == other
+    def __ge__(self, other: Tile) -> bool:
+        return not (self < other)
+
 class BonusTile(Tile):
     suit: Bonuses
     number: Union[int, Flower, Season]
