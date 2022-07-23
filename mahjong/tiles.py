@@ -138,7 +138,13 @@ class Tile:
         """Initialize Tile."""
         self.suit = suit
         self.number = number
-        if self.suit in Simples:
+        if isinstance(suit, Simples):
+            max_num = 9
+        else:
+            max_num = 4
+        if not (0 <= number < max_num):
+            raise ValueError(f'Number {number+1} not in range [1, {max_num}]')
+        if isinstance(self.suit, Simples):
             self.number = int(number)
         elif self.suit == Honors.FENG:
             self.number = Wind(number)
@@ -150,8 +156,8 @@ class Tile:
             raise ValueError(f'Invalid suit: {self.suit!r}')
 
     @classmethod
-    def from_str(cls, s: str) -> Tile:
-        """Tile.from_str('suit/number') -> Tile"""
+    def from_str(cls, s: str) -> Union[Tile, BonusTile]:
+        """Tile.from_str('suit/number') -> Tile | BonusTile"""
         suit_s, number_s = s.split('/')
         suit: Suit = Misc.UNKNOWN
         for num in (Simples, Honors, Bonuses, Misc):
@@ -164,12 +170,9 @@ class Tile:
         else:
             raise ValueError('Invalid suit')
         number: int = int(number_s) - 1
-        if not (0 <= number < 9):
-            raise ValueError(f'Number {number_s} not in range [1, 9]')
-        if suit == Honors.FENG:
-            number = Wind(number)
-        if suit == Honors.LONG:
-            number = Dragon(number)
+        # number checking and casting is done by constructors
+        if isinstance(suit, Bonuses):
+            return BonusTile(suit, number)
         return cls(suit, number)
 
     def __str__(self) -> str:
