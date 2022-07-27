@@ -73,7 +73,7 @@ class Question(Enum):
     SELF_DRAW_Q = 13
 
 @dataclass
-class UserIO:
+class UserIO(ABC):
     """A question to be answered."""
 
     _question: ClassVar[Question]
@@ -350,7 +350,7 @@ class HandResult(Enum):
     DEALER_WON = 2
 
 @dataclass
-class HandEnding:
+class HandEnding(ABC):
     """The ending conditions of a hand.
 
     The implied question is "The hand has just ended, are you ready to
