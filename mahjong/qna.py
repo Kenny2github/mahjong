@@ -1,7 +1,11 @@
 from __future__ import annotations
+from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, ClassVar, Generator, List, Mapping, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING, ClassVar, Generator, List,
+    Mapping, Optional, Tuple, Union
+)
 
 if TYPE_CHECKING:
     from .game import Hand
@@ -103,7 +107,7 @@ class UserIO:
         return f'{type(self).__name__}({args})'
 
 @dataclass
-class PlayeredIO(UserIO):
+class PlayeredIO(UserIO, ABC):
     """A :class:`UserIO` with a :attr:`~PlayeredIO.player` attribute.
 
     Attributes:
@@ -122,7 +126,7 @@ class PlayeredIO(UserIO):
         return self.player.shown
 
 @dataclass
-class ArrivedIO(PlayeredIO):
+class ArrivedIO(PlayeredIO, ABC):
     """A :class:`PlayeredIO` with an :attr:`arrived` attribute.
 
     Attributes:
